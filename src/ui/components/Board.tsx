@@ -119,11 +119,13 @@ function StoneCircles({
   count,
   pitIndex,
   pattern,
+  mirror,
   className,
 }: {
   count: number
   pitIndex: number
   pattern: StonePattern
+  mirror: boolean
   className?: string
 }) {
   const positions = useMemo(
@@ -132,26 +134,31 @@ function StoneCircles({
   )
   return (
     <>
-      {positions.map((pos, i) => (
-        <span
-          key={i}
-          className={
-            'absolute w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ' +
-            (className ?? 'bg-stone')
-          }
-          style={{
-            left: `${pos.x * 100}%`,
-            top: `${pos.y * 100}%`,
-            transform: 'translate(-50%, -50%)',
-          }}
-        />
-      ))}
+      {positions.map((pos, i) => {
+        const x = mirror ? 1 - pos.x : pos.x
+        const y = mirror ? 1 - pos.y : pos.y
+        return (
+          <span
+            key={i}
+            className={
+              'absolute w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ' +
+              (className ?? 'bg-stone')
+            }
+            style={{
+              left: `${x * 100}%`,
+              top: `${y * 100}%`,
+              transform: 'translate(-50%, -50%)',
+            }}
+          />
+        )
+      })}
     </>
   )
 }
 
 function getInterval(speed: number): number {
-  return Math.max(16, Math.round(200 / speed))
+  if (speed <= 0) return 0
+  return Math.max(16, Math.round(300 / speed))
 }
 
 function BoardInner({
@@ -346,6 +353,8 @@ function BoardInner({
     return () => clearTimeout(t)
   }, [animPhase, onAnimationComplete])
 
+  const mirrored = !viewFromBottom
+
   const renderPit = useCallback(
     (pitIndex: number) => {
       const clickable = clickablePits.includes(pitIndex) && !animating
@@ -369,16 +378,20 @@ function BoardInner({
             count={count}
             pitIndex={pitIndex}
             pattern={stonePattern}
+            mirror={mirrored}
           />
           {showPitCounts && (
-            <span className="absolute bottom-0.5 right-1 text-[9px] md:text-[10px] font-bold text-stone/80 leading-none pointer-events-none">
+            <span
+              className="absolute bottom-0.5 right-1 text-[9px] md:text-[10px] font-bold text-stone/80 leading-none pointer-events-none"
+              style={mirrored ? { transform: 'rotate(180deg)' } : undefined}
+            >
               {count}
             </span>
           )}
         </button>
       )
     },
-    [clickablePits, animating, displayBoard, onPitClick, stonePattern, showPitCounts],
+    [clickablePits, animating, displayBoard, onPitClick, stonePattern, showPitCounts, mirrored],
   )
 
   const renderStore = (storeIndex: number, accent: boolean) => (
@@ -395,9 +408,13 @@ function BoardInner({
         count={displayBoard[storeIndex]!}
         pitIndex={100 + storeIndex}
         pattern={stonePattern}
+        mirror={mirrored}
         className="bg-stone/70"
       />
-      <span className="relative z-10 text-lg md:text-2xl font-bold drop-shadow-md">
+      <span
+        className="relative z-10 text-lg md:text-2xl font-bold drop-shadow-md"
+        style={mirrored ? { transform: 'rotate(180deg)' } : undefined}
+      >
         {displayBoard[storeIndex]}
       </span>
     </div>

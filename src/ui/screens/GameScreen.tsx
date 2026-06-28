@@ -399,10 +399,10 @@ export function GameScreen() {
       <AnimatePresence mode="wait">
         <motion.div
           key={boardKey}
-          initial={{ rotate: 180, scale: 0.75, opacity: 0 }}
-          animate={{ rotate: 0, scale: 1, opacity: 1 }}
-          exit={{ rotate: -180, scale: 0.75, opacity: 0 }}
-          transition={{ duration: 0.3, ease: 'easeInOut' }}
+          initial={{ rotate: 90, opacity: 0 }}
+          animate={{ rotate: 0, opacity: 1 }}
+          exit={{ rotate: -90, opacity: 0 }}
+          transition={{ duration: 0.35, ease: 'easeInOut' }}
           className="w-full"
         >
           <Board
