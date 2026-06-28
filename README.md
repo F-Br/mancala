@@ -1,32 +1,19 @@
-# React + TypeScript + Vite
+# Mancala
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A web Mancala trainer. PWA-style SPA, no backend. Local play vs bots and 2-player pass-and-play, plus post-game analysis.
 
-Currently, two official plugins are available:
+Built with Vite + React + TypeScript + Tailwind CSS.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Scripts
 
-## React Compiler
+| Command               | Description                  |
+| --------------------- | ---------------------------- |
+| `npm run dev`         | Start dev server             |
+| `npm run build`       | Type-check and build         |
+| `npm test`            | Run tests                    |
+| `npm run test:watch`  | Run tests in watch mode      |
+| `npm run lint`        | ESLint check                 |
+| `npm run format`      | Prettier write               |
+| `npm run format:check`| Prettier check               |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+See [`AGENTS.md`](./AGENTS.md) for project conventions.
