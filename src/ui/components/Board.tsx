@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import type { GameState, Move } from '../../engine'
+import type { StonePattern } from '../../state/settingsStore'
 
 interface BoardProps {
   gameState: GameState
@@ -14,48 +15,110 @@ interface BoardProps {
   onStoneLanded?: (stoneIndex: number) => void
   onCapture?: () => void
   onExtraTurn?: () => void
+  stonePattern?: StonePattern
+  showPitCounts?: boolean
 }
 
 function seededRandom(seed: number): number {
-  const x = Math.sin(seed + 1) * 10000
+  const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453
   return x - Math.floor(x)
 }
 
-function getStonePositions(
+function getJitteredPositions(
   count: number,
   pitIndex: number,
 ): { x: number; y: number }[] {
   if (count === 0) return []
   const positions: { x: number; y: number }[] = []
-  const cols = Math.max(2, Math.ceil(Math.sqrt(count * 1.2)))
+  const cols = Math.max(2, Math.ceil(Math.sqrt(count * 1.3)))
   const rows = Math.ceil(count / cols)
 
   for (let i = 0; i < count; i++) {
     const col = i % cols
     const row = Math.floor(i / cols)
-    const seed = pitIndex * 100 + i * 7 + 3
-    const jx = (seededRandom(seed) - 0.5) * 0.45
-    const jy = (seededRandom(seed + 1) - 0.5) * 0.45
+    const seed = pitIndex * 1000 + i * 17 + 3
+    const jx = (seededRandom(seed) - 0.5) * 0.55
+    const jy = (seededRandom(seed + 1) - 0.5) * 0.55
+    const cx = (col + 0.5 + jx) / cols
+    const cy = (row + 0.5 + jy) / rows
     positions.push({
-      x: (col + 0.5 + jx) / cols,
-      y: (row + 0.5 + jy) / rows,
+      x: Math.max(0.05, Math.min(0.95, cx)),
+      y: Math.max(0.05, Math.min(0.95, cy)),
     })
   }
   return positions
 }
 
+function getSymmetricPositions(count: number): { x: number; y: number }[] {
+  if (count === 0) return []
+
+  const ringLayouts: Record<number, [number, number][]> = {
+    1: [[0.5, 0.5]],
+    2: [[0.3, 0.5], [0.7, 0.5]],
+    3: [[0.5, 0.25], [0.25, 0.65], [0.75, 0.65]],
+    4: [[0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]],
+    5: [[0.5, 0.5], [0.35, 0.2], [0.65, 0.2], [0.35, 0.8], [0.65, 0.8]],
+    6: [[0.25, 0.3], [0.75, 0.3], [0.25, 0.7], [0.75, 0.7], [0.5, 0.15], [0.5, 0.85]],
+    7: [[0.5, 0.5], [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75], [0.5, 0.1], [0.5, 0.9]],
+    8: [[0.2, 0.2], [0.5, 0.2], [0.8, 0.2], [0.2, 0.5], [0.8, 0.5], [0.2, 0.8], [0.5, 0.8], [0.8, 0.8]],
+    9: [[0.5, 0.5], [0.2, 0.2], [0.5, 0.2], [0.8, 0.2], [0.2, 0.5], [0.8, 0.5], [0.2, 0.8], [0.5, 0.8], [0.8, 0.8]],
+  }
+
+  const predefined = ringLayouts[count]
+  if (predefined) return predefined.map(([x, y]) => ({ x, y }))
+
+  const positions: { x: number; y: number }[] = []
+  let remaining = count
+
+  if (remaining % 2 === 1) {
+    positions.push({ x: 0.5, y: 0.5 })
+    remaining--
+  }
+
+  let ring = 1
+  while (remaining > 0) {
+    const slots = ring * 4
+    const toPlace = Math.min(remaining, slots)
+    const step = (Math.PI * 2) / toPlace
+    const radius = ring * 0.17
+    const offset = (ring % 2) * step * 0.5
+
+    for (let i = 0; i < toPlace; i++) {
+      positions.push({
+        x: 0.5 + Math.cos(i * step + offset) * radius,
+        y: 0.5 + Math.sin(i * step + offset) * radius,
+      })
+    }
+    remaining -= toPlace
+    ring++
+  }
+
+  return positions
+}
+
+function getStonePositions(
+  count: number,
+  pitIndex: number,
+  pattern: StonePattern,
+): { x: number; y: number }[] {
+  if (pattern === 'symmetric') return getSymmetricPositions(count)
+  return getJitteredPositions(count, pitIndex)
+}
+
 function StoneCircles({
   count,
   pitIndex,
+  pattern,
   className,
 }: {
   count: number
   pitIndex: number
+  pattern: StonePattern
   className?: string
 }) {
   const positions = useMemo(
-    () => getStonePositions(count, pitIndex),
-    [count, pitIndex],
+    () => getStonePositions(count, pitIndex, pattern),
+    [count, pitIndex, pattern],
   )
   return (
     <>
@@ -93,6 +156,8 @@ function BoardInner({
   onStoneLanded,
   onCapture,
   onExtraTurn,
+  stonePattern = 'random',
+  showPitCounts = false,
 }: BoardProps) {
   const boardRef = useRef<HTMLDivElement>(null)
 
@@ -290,11 +355,20 @@ function BoardInner({
               : 'bg-pit/50 border-board/50 cursor-default')
           }
         >
-          <StoneCircles count={count} pitIndex={pitIndex} />
+          <StoneCircles
+            count={count}
+            pitIndex={pitIndex}
+            pattern={stonePattern}
+          />
+          {showPitCounts && (
+            <span className="absolute bottom-0.5 right-1 text-[9px] md:text-[10px] font-bold text-stone/80 leading-none pointer-events-none">
+              {count}
+            </span>
+          )}
         </button>
       )
     },
-    [clickablePits, animating, displayBoard, onPitClick],
+    [clickablePits, animating, displayBoard, onPitClick, stonePattern, showPitCounts],
   )
 
   const renderStore = (storeIndex: number, accent: boolean) => (
@@ -310,6 +384,7 @@ function BoardInner({
       <StoneCircles
         count={displayBoard[storeIndex]!}
         pitIndex={100 + storeIndex}
+        pattern={stonePattern}
         className="bg-stone/70"
       />
       <span className="relative z-10 text-lg md:text-2xl font-bold drop-shadow-md">
@@ -318,21 +393,44 @@ function BoardInner({
     </div>
   )
 
+  const stoneSize = effectiveSpeed > 0 ? 'w-2.5 h-2.5 md:w-3 md:h-3' : 'w-2 h-2 md:w-2.5 md:h-2.5'
+
   return (
     <div
       ref={boardRef}
       className="flex flex-col md:flex-row items-center gap-2 w-full max-w-xl mx-auto relative"
     >
-      {renderStore(leftStore, animPhase !== 'idle' && leftStore === ownStore)}
+      {sourceCenter && targetCenter && animPhase === 'sowing' && (
+        <motion.div
+          className={'absolute z-20 rounded-full bg-stone shadow-sm ' + stoneSize}
+          style={{ left: sourceCenter.x - 6, top: sourceCenter.y - 6 }}
+          animate={{
+            left: targetCenter.x - 6,
+            top: targetCenter.y - 6,
+          }}
+          transition={{
+            duration: getInterval(effectiveSpeed) / 1000,
+            ease: [0.4, 0, 0.2, 1],
+          }}
+        />
+      )}
 
-      <div className="flex flex-col gap-2 flex-1 w-full relative">
-        {sourceCenter && targetCenter && animPhase === 'sowing' && (
+      {animPhase === 'capture' &&
+        capturePhase >= 1 &&
+        captureFromCenter &&
+        captureToCenter && (
           <motion.div
-            className="absolute z-20 w-2.5 h-2.5 md:w-3 md:h-3 rounded-full bg-stone shadow-sm"
-            initial={{ x: sourceCenter.x - 5, y: sourceCenter.y - 5 }}
+            className={
+              'absolute z-20 rounded-full bg-accent shadow-md ' +
+              (effectiveSpeed > 0 ? 'w-3 h-3 md:w-3.5 md:h-3.5' : 'w-2.5 h-2.5 md:w-3 md:h-3')
+            }
+            style={{
+              left: captureFromCenter.x - 7,
+              top: captureFromCenter.y - 7,
+            }}
             animate={{
-              x: targetCenter.x - 5,
-              y: targetCenter.y - 5,
+              left: captureToCenter.x - 7,
+              top: captureToCenter.y - 7,
             }}
             transition={{
               duration: getInterval(effectiveSpeed) / 1000,
@@ -341,39 +439,22 @@ function BoardInner({
           />
         )}
 
-        {animPhase === 'capture' &&
-          capturePhase >= 1 &&
-          captureFromCenter &&
-          captureToCenter && (
-            <motion.div
-              className="absolute z-20 w-3 h-3 md:w-3.5 md:h-3.5 rounded-full bg-accent shadow-md"
-              initial={{
-                x: captureFromCenter.x - 6,
-                y: captureFromCenter.y - 6,
-              }}
-              animate={{
-                x: captureToCenter.x - 6,
-                y: captureToCenter.y - 6,
-              }}
-              transition={{
-                duration: getInterval(effectiveSpeed) / 1000,
-                ease: [0.4, 0, 0.2, 1],
-              }}
-            />
-          )}
+      {showExtraToast && (
+        <motion.div
+          className="absolute top-1/2 left-1/2 z-30 -translate-x-1/2 -translate-y-1/2
+                     bg-accent text-bg text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap"
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.5 }}
+          transition={{ duration: 0.2 }}
+        >
+          Extra Turn
+        </motion.div>
+      )}
 
-        {showExtraToast && (
-          <motion.div
-            className="absolute top-1/2 left-1/2 z-30 -translate-x-1/2 -translate-y-1/2
-                       bg-accent text-bg text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap"
-            initial={{ opacity: 0, scale: 0.5 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.2 }}
-          >
-            Extra Turn
-          </motion.div>
-        )}
+      {renderStore(leftStore, animPhase !== 'idle' && leftStore === ownStore)}
 
+      <div className="flex flex-col gap-2 flex-1 w-full">
         <div className="flex gap-1.5 md:gap-2 justify-center">
           {topRowPits.map(renderPit)}
         </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { legalMoves } from '../../engine'
 import type { GameState as EngineGameState, Move, Side } from '../../engine'
 import { requestBotMove, terminateBotWorker } from '../../bots/client'
@@ -76,15 +76,18 @@ export function GameScreen() {
   const animationSpeed = useSettingsStore((s) => s.animationSpeed)
   const soundEnabled = useSettingsStore((s) => s.soundEnabled)
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled)
+  const stonePattern = useSettingsStore((s) => s.stonePattern)
+  const showPitCounts = useSettingsStore((s) => s.showPitCounts)
 
   const prefersReducedMotion = usePrefersReducedMotion()
   const effectiveSpeed = prefersReducedMotion ? 0 : animationSpeed
 
   const [thinking, setThinking] = useState(false)
-  const [passToShown, setPassToShown] = useState(false)
   const [pendingMove, setPendingMove] = useState<Move | null>(null)
   const [prevBoard, setPrevBoard] = useState<number[] | null>(null)
   const [boardLocked, setBoardLocked] = useState(false)
+  const [displayViewFromBottom, setDisplayViewFromBottom] = useState(true)
+  const [pitCountsVisible, setPitCountsVisible] = useState(false)
 
   const botRequestRef = useRef<BotMoveHandle | null>(null)
   const botInFlight = useRef(false)
@@ -98,7 +101,7 @@ export function GameScreen() {
       : playerSide
     : null
 
-  const viewFromBottom = isVsBot
+  const nextViewFromBottom = isVsBot
     ? humanSide === 'bottom'
     : boardFlip
       ? gameState?.currentPlayer === 'bottom'
@@ -195,22 +198,18 @@ export function GameScreen() {
       return
     }
 
+    if (!isVsBot && boardFlip) {
+      setDisplayViewFromBottom(newState.currentPlayer === 'bottom')
+    }
+
     if (isVsBot && newState.currentPlayer !== humanSide) {
       doBotMove(newState)
-    } else if (!isVsBot && boardFlip) {
-      const lastMove =
-        newState.moveHistory[newState.moveHistory.length - 1]
-      if (lastMove && lastMove.player !== newState.currentPlayer) {
-        setPassToShown(true)
-        setTimeout(() => setPassToShown(false), 1200)
-      }
     }
   }, [
     isVsBot,
     humanSide,
     doBotMove,
     boardFlip,
-    pendingMove,
     soundEnabled,
     hapticsEnabled,
   ])
@@ -298,6 +297,12 @@ export function GameScreen() {
   }, [mode, botLevel, playerSide, reset, setSavedMeta])
 
   useEffect(() => {
+    if (isVsBot || !boardFlip) {
+      setDisplayViewFromBottom(nextViewFromBottom)
+    }
+  }, [isVsBot, boardFlip, nextViewFromBottom])
+
+  useEffect(() => {
     if (!gameState || !isVsBot || boardLocked) return
     if (gameState.status !== 'in-progress') return
     if (gameState.currentPlayer === humanSide) return
@@ -315,6 +320,11 @@ export function GameScreen() {
   if (!mode && !gameState) return <Navigate to="/home" replace />
   if (!gameState) return null
 
+  const currentPlayerLabel =
+    gameState.currentPlayer === 'bottom' ? bottomLabel : topLabel
+
+  const boardKey = displayViewFromBottom ? 'normal' : 'flipped'
+
   return (
     <div className="min-h-screen p-3 md:p-4 flex flex-col items-center gap-3 max-w-4xl mx-auto relative">
       <div className="flex items-center justify-between w-full max-w-xl mx-auto">
@@ -325,16 +335,28 @@ export function GameScreen() {
         >
           &larr; {strings.game.home}
         </button>
-        {!isVsBot && takebackAllowed && (
-          <button
-            type="button"
-            onClick={handleTakeback}
-            className="text-accent hover:underline text-sm"
-          >
-            {strings.game.takeback}
-          </button>
-        )}
-        {isVsBot && <div className="text-sm" />}
+        <div className="flex items-center gap-2">
+          {!isVsBot && !boardLocked && gameState.status === 'in-progress' && (
+            <button
+              type="button"
+              onClick={() => setPitCountsVisible((v) => !v)}
+              className="text-accent hover:underline text-xs"
+            >
+              {pitCountsVisible
+                ? strings.game.hideCounts
+                : strings.game.showCounts}
+            </button>
+          )}
+          {!isVsBot && takebackAllowed && (
+            <button
+              type="button"
+              onClick={handleTakeback}
+              className="text-accent hover:underline text-sm"
+            >
+              {strings.game.takeback}
+            </button>
+          )}
+        </div>
       </div>
 
       <ScorePanel
@@ -343,7 +365,7 @@ export function GameScreen() {
         bottomScore={gameState.board[6]!}
         topScore={gameState.board[13]!}
         currentPlayer={gameState.currentPlayer}
-        viewFromBottom={viewFromBottom}
+        viewFromBottom={displayViewFromBottom}
       />
 
       {thinking && (
@@ -353,28 +375,45 @@ export function GameScreen() {
         </div>
       )}
 
-      {passToShown && !isVsBot && (
-        <div className="text-accent text-sm font-medium">
-          {strings.game.passTo}{' '}
-          {gameState.currentPlayer === 'bottom'
-            ? bottomLabel
-            : topLabel}
+      <div className="relative w-full max-w-xl mx-auto">
+        <div className="h-6 flex items-center justify-center">
+          {!isVsBot &&
+            boardFlip &&
+            gameState.currentPlayer === (displayViewFromBottom ? 'bottom' : 'top') && (
+              <span className="text-accent text-sm font-medium">
+                {strings.game.passTo} {currentPlayerLabel}
+              </span>
+            )}
         </div>
-      )}
+      </div>
 
-      <Board
-        gameState={gameState}
-        viewFromBottom={viewFromBottom}
-        clickablePits={clickablePits}
-        onPitClick={handlePitClick}
-        pendingMove={pendingMove}
-        prevBoard={prevBoard}
-        effectiveSpeed={effectiveSpeed}
-        onAnimationComplete={handleAnimationComplete}
-        onStoneLanded={handleStoneLanded}
-        onCapture={handleCaptureEvent}
-        onExtraTurn={handleExtraTurnEvent}
-      />
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={boardKey}
+          initial={{ rotateY: -90, opacity: 0, scale: 0.95 }}
+          animate={{ rotateY: 0, opacity: 1, scale: 1 }}
+          exit={{ rotateY: 90, opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.25, ease: 'easeInOut' }}
+          className="w-full"
+          style={{ perspective: 1200, backfaceVisibility: 'hidden' }}
+        >
+          <Board
+            gameState={gameState}
+            viewFromBottom={displayViewFromBottom}
+            clickablePits={clickablePits}
+            onPitClick={handlePitClick}
+            pendingMove={pendingMove}
+            prevBoard={prevBoard}
+            effectiveSpeed={effectiveSpeed}
+            onAnimationComplete={handleAnimationComplete}
+            onStoneLanded={handleStoneLanded}
+            onCapture={handleCaptureEvent}
+            onExtraTurn={handleExtraTurnEvent}
+            stonePattern={stonePattern}
+            showPitCounts={showPitCounts || pitCountsVisible}
+          />
+        </motion.div>
+      </AnimatePresence>
 
       <MoveList moves={gameState.moveHistory} />
 

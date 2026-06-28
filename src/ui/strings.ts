@@ -36,6 +36,8 @@ export const strings = {
     draw: "It's a draw!",
     winner: (name: string) => `${name} wins!`,
     score: (score: number) => `${score}`,
+    showCounts: 'Show counts',
+    hideCounts: 'Hide counts',
   },
   settings: {
     title: 'Settings',
@@ -51,6 +53,11 @@ export const strings = {
     liveHints: 'Live Hints',
     replayTutorial: 'Replay Tutorial',
     resetAll: 'Reset All Settings',
+    stonePattern: 'Stone Pattern',
+    stonePatternRandom: 'Random',
+    stonePatternSymmetric: 'Symmetric',
+    showPitCounts: 'Show Pit Counts',
+    showPitCountsDesc: 'Display numbers next to pits',
   },
   placeholder: {
     gameHistory: 'Game history coming soon.',
