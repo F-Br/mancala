@@ -1,0 +1,69 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import type { GameState, RuleConfig, Side } from '../engine'
+import { createInitialState, applyMove } from '../engine'
+import { KALAH_STANDARD } from '../engine'
+import type { BotLevel } from '../bots/types'
+import type { GameMode } from './modeStore'
+
+export interface SavedMeta {
+  mode: GameMode
+  botLevel: BotLevel
+  playerSide: Side | 'random'
+}
+
+export interface GameStore {
+  gameState: GameState | null
+  rules: RuleConfig
+  firstPlayer: Side
+  savedMeta: SavedMeta | null
+  makeMove: (pitIndex: number) => void
+  reset: (firstPlayer?: Side) => void
+  takeback: () => void
+  clear: () => void
+  setSavedMeta: (meta: SavedMeta) => void
+}
+
+export const useGameStore = create<GameStore>()(
+  persist(
+    (set, get) => ({
+      gameState: null,
+      rules: KALAH_STANDARD,
+      firstPlayer: 'bottom' as Side,
+      savedMeta: null,
+      makeMove: (pitIndex: number) => {
+        const { gameState, rules } = get()
+        if (!gameState || gameState.status === 'finished') return
+        const newState = applyMove(gameState, pitIndex, rules)
+        set({ gameState: newState })
+      },
+      reset: (firstPlayer?: Side) => {
+        const rules = get().rules
+        const fp = firstPlayer ?? 'bottom'
+        const state = createInitialState(rules, fp)
+        set({ gameState: state, firstPlayer: fp })
+      },
+      takeback: () => {
+        const { gameState, rules, firstPlayer } = get()
+        if (!gameState || gameState.moveHistory.length === 0) return
+        const initial = createInitialState(rules, firstPlayer)
+        let prev = initial
+        for (let i = 0; i < gameState.moveHistory.length - 1; i++) {
+          prev = applyMove(prev, gameState.moveHistory[i]!.pitIndex, rules)
+        }
+        set({ gameState: prev })
+      },
+      clear: () => set({ gameState: null, savedMeta: null }),
+      setSavedMeta: (meta: SavedMeta) => set({ savedMeta: meta }),
+    }),
+    {
+      name: 'mancala-current-game',
+      partialize: (state) => ({
+        gameState: state.gameState,
+        rules: state.rules,
+        firstPlayer: state.firstPlayer,
+        savedMeta: state.savedMeta,
+      }),
+    },
+  ),
+)
