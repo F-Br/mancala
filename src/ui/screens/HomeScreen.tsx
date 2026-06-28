@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useGameStore } from '../../state/gameStore'
 import { useModeStore } from '../../state/modeStore'
+import { InstallPrompt } from '../components/InstallPrompt'
 import { strings } from '../strings'
 
 export function HomeScreen() {
@@ -71,6 +72,8 @@ export function HomeScreen() {
           {strings.home.settings}
         </button>
       </div>
+
+      <InstallPrompt visible />
     </main>
   )
 }

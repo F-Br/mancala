@@ -10,6 +10,7 @@
     "lint": "eslint src/",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
+    "icons": "python3 scripts/generate-icons.py",
     "test": "vitest run",
     "test:watch": "vitest"
   },

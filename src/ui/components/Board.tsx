@@ -357,6 +357,13 @@ function BoardInner({
 
   const mirrored = !viewFromBottom
 
+  const pitAriaLabel = (pitIndex: number) => {
+    const count = displayBoard[pitIndex]!
+    const bottomPits = viewFromBottom ? [0, 1, 2, 3, 4, 5] : [7, 8, 9, 10, 11, 12]
+    const side = bottomPits.includes(pitIndex) ? 'your' : 'opponent'
+    return `Pit ${pitIndex + 1}, ${count} stones, ${side} side`
+  }
+
   const renderPit = useCallback(
     (pitIndex: number) => {
       const clickable = clickablePits.includes(pitIndex) && !animating
@@ -370,6 +377,7 @@ function BoardInner({
           data-el={pitIndex}
           onClick={() => enabled && onPitClick(pitIndex)}
           disabled={!enabled}
+          aria-label={pitAriaLabel(pitIndex)}
           className={
             'relative w-11 h-11 md:w-14 md:h-14 rounded-xl overflow-hidden border-2 ' +
             (isAccent

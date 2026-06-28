@@ -30,7 +30,9 @@ export const useHistoryStore = create<HistoryState>()(
     (set, get) => ({
       records: [],
       addRecord: (record: GameRecord) => {
-        const exists = get().records.some((r) => r.id === record.id)
+        const exists = get().records.some(
+          (r) => r.id === record.id || r.gameText === record.gameText,
+        )
         if (exists) return
         set((s) => ({ records: [...s.records, record] }))
       },
@@ -49,6 +51,9 @@ export const useHistoryStore = create<HistoryState>()(
     {
       name: 'mancala-history',
       partialize: (state) => ({ records: state.records }),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('Failed to load history from localStorage:', error)
+      },
     },
   ),
 )

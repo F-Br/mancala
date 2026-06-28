@@ -142,6 +142,7 @@ export function GameScreen() {
   const [liveHintVisible, setLiveHintVisible] = useState(false)
   const [hintLoading, setHintLoading] = useState(false)
   const [oneShotHintPit, setOneShotHintPit] = useState<number | null>(null)
+  const [selectedPit, setSelectedPit] = useState<number | null>(null)
   const [shareStatus, setShareStatus] = useState<string | null>(null)
 
   const botRequestRef = useRef<BotMoveHandle | null>(null)
@@ -537,6 +538,56 @@ export function GameScreen() {
     }
   }, [liveHintPit])
 
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (!gameState || gameState.status !== 'in-progress') return
+      if (boardLocked || thinking) return
+      if (isVsBot && gameState.currentPlayer !== humanSide) return
+
+      if (e.key >= '1' && e.key <= '6') {
+        const idx = parseInt(e.key, 10) - 1
+        const row = displayViewFromBottom
+          ? [0, 1, 2, 3, 4, 5]
+          : [7, 8, 9, 10, 11, 12]
+        if (idx >= 0 && idx < row.length) {
+          const pitIndex = row[idx]!
+          if (clickablePits.includes(pitIndex)) {
+            setSelectedPit(pitIndex)
+          }
+        }
+        return
+      }
+
+      if (e.key === 'Enter' && selectedPit !== null) {
+        if (clickablePits.includes(selectedPit)) {
+          handlePitClick(selectedPit!)
+          setSelectedPit(null)
+        }
+        return
+      }
+
+      if (e.key === 'Escape') {
+        setSelectedPit(null)
+      }
+    },
+    [
+      gameState,
+      boardLocked,
+      thinking,
+      isVsBot,
+      humanSide,
+      displayViewFromBottom,
+      clickablePits,
+      selectedPit,
+      handlePitClick,
+    ],
+  )
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleKeyDown])
+
   useEffect(() => {
     if (gameState?.status === 'finished') {
       saveToHistory()
@@ -551,7 +602,7 @@ export function GameScreen() {
 
   const boardKey = displayViewFromBottom ? 'normal' : 'flipped'
 
-  const accentPit = oneShotHintPit ?? liveHintPit
+  const accentPit = selectedPit ?? oneShotHintPit ?? liveHintPit
   const isHumanTurn =
     gameState.status === 'in-progress' &&
     (!isVsBot || gameState.currentPlayer === humanSide) &&
@@ -633,6 +684,14 @@ export function GameScreen() {
           >
             {hintLoading ? '...' : strings.game.hint}
           </button>
+        )}
+      </div>
+
+      <div className="h-4 flex items-center justify-center">
+        {isHumanTurn && selectedPit !== null && (
+          <span className="text-[10px] text-muted">
+            Pit {selectedPit + 1} selected &middot; Press Enter to play
+          </span>
         )}
       </div>
 

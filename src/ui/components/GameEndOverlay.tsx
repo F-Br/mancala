@@ -34,8 +34,8 @@ export function GameEndOverlay({
   const finalScore = `${bottomLabel}: ${board[6]!}  \u2014  ${topLabel}: ${board[13]!}`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-board rounded-2xl p-6 mx-4 max-w-sm w-full flex flex-col items-center gap-4 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true">
+      <div className="bg-board rounded-2xl p-6 mx-4 max-w-sm w-full flex flex-col items-center gap-4 shadow-2xl" aria-live="assertive">
         <h2 className="text-2xl font-bold text-text">{resultText}</h2>
         <p className="text-lg text-muted">{finalScore}</p>
         <div className="flex flex-col gap-2 w-full">

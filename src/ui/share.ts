@@ -38,7 +38,7 @@ export async function shareGame(
     try {
       await navigator.share({ title, url })
       return
-    } catch {
+    } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') return
     }
   }

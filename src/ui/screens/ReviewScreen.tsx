@@ -38,7 +38,7 @@ const classificationLabel: Record<ClassificationKey, string> = {
 
 interface PositionInfo {
   state: GameState
-  move?: Move
+  move: Move | undefined
   index: number
   player: Side
 }
@@ -118,7 +118,9 @@ function EvalGraph({
 
   const playerSide: Side | null = savedMeta?.mode === 'vs-bot'
     ? savedMeta.playerSide === 'random' ? 'bottom' : savedMeta.playerSide
-    : null
+    : savedMeta?.mode === 'local-2p'
+      ? 'bottom'
+      : null
 
   const movePositions = positions.filter((p) => p.move)
   const dataPoints = movePositions.map((pos) => {
@@ -618,7 +620,7 @@ export function ReviewScreen() {
     currentPos?.move &&
     currentEntry &&
     currentEntry.bestPitIndex >= 0 &&
-    currentPos.move.pitIndex !== currentEntry.bestPitIndex
+    currentPos.move!.pitIndex !== currentEntry.bestPitIndex
 
   const pvMoves = currentEntry?.pv ?? []
 
@@ -891,6 +893,7 @@ export function ReviewScreen() {
                   }}
                   disabled={currentIndex === 0}
                   className="text-accent disabled:opacity-30 text-lg"
+                  aria-label="Previous move"
                 >
                   &#9664;
                 </button>
@@ -909,6 +912,7 @@ export function ReviewScreen() {
                   }}
                   disabled={currentIndex >= maxIndex}
                   className="text-accent disabled:opacity-30 text-lg"
+                  aria-label="Next move"
                 >
                   &#9654;
                 </button>
@@ -921,6 +925,7 @@ export function ReviewScreen() {
                   onClick={togglePlayback}
                   disabled={maxIndex <= 0}
                   className="text-accent disabled:opacity-30 text-sm font-medium w-12"
+                  aria-label={playing ? 'Pause playback' : 'Play moves'}
                 >
                   {playing ? '\u23F8' : '\u25B6'}
                 </button>
@@ -943,7 +948,7 @@ export function ReviewScreen() {
                   : 'Start'}
                 {currentPos?.move && (
                   <span className="ml-1 text-text font-mono">
-                    {notatePit(currentPos.move.pitIndex)}
+                    {notatePit(currentPos.move!.pitIndex)}
                   </span>
                 )}
               </div>

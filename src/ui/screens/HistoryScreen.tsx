@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { parseGameText } from '../../engine'
+import { useGameStore } from '../../state/gameStore'
 import { useHistoryStore } from '../../state/historyStore'
 import { strings } from '../strings'
 
@@ -27,7 +29,19 @@ export function HistoryScreen() {
   const handleRowClick = (idx: number) => {
     const record = sorted[idx]
     if (!record) return
-    navigate('/analysis', { state: { fromHistory: record } })
+
+    const state = parseGameText(record.gameText)
+    useGameStore.getState().clear()
+    useGameStore.setState({
+      gameState: state,
+      savedMeta: {
+        mode: record.mode,
+        botLevel: record.botLevel ?? 'beginner',
+        playerSide: record.playerSide,
+      },
+      analysisCache: record.analysisResult ?? null,
+    })
+    navigate('/analysis', { state: { fromHistory: true } })
   }
 
   return (
@@ -144,7 +158,7 @@ export function HistoryScreen() {
                     deleteRecord(record.id)
                   }}
                   className="text-muted/50 hover:text-red-400 text-xs shrink-0 px-1"
-                  title={strings.history.delete}
+                  aria-label={strings.history.delete}
                 >
                   &times;
                 </button>

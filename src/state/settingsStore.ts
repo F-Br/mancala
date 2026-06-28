@@ -54,6 +54,12 @@ export const useSettingsStore = create<SettingsState>()(
       setShowPitCounts: (showPitCounts) => set({ showPitCounts }),
       resetAll: () => set(defaults),
     }),
-    { name: 'mancala-settings' },
+    {
+      name: 'mancala-settings',
+      skipHydration: false,
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('Failed to load settings from localStorage:', error)
+      },
+    },
   ),
 )

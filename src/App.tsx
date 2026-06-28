@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { ThemeProvider } from './ui/theme'
 import { HomeScreen } from './ui/screens/HomeScreen'
 import { BotSelectScreen } from './ui/screens/BotSelectScreen'
@@ -11,9 +12,7 @@ import { HistoryScreen } from './ui/screens/HistoryScreen'
 import { StatsScreen } from './ui/screens/StatsScreen'
 import { PlaceholderScreen } from './ui/screens/PlaceholderScreen'
 import { useGameStore } from './state/gameStore'
-import { useHistoryStore } from './state/historyStore'
 import { useSettingsStore } from './state/settingsStore'
-import { strings } from './ui/strings'
 import { parseGameText } from './engine'
 import LZString from 'lz-string'
 
@@ -67,28 +66,56 @@ function TutorialGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-function AppRoutes() {
+const pageVariants = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -8 },
+}
+
+const pageTransition = {
+  duration: 0.2,
+  ease: 'easeInOut' as const,
+}
+
+function AnimatedPage({ children }: { children: React.ReactNode }) {
   return (
-    <Routes>
-      <Route path="/home" element={<HomeScreen />} />
-      <Route path="/bot-select" element={<BotSelectScreen />} />
-      <Route path="/game" element={<GameScreen />} />
-      <Route path="/settings" element={<SettingsScreen />} />
-      <Route path="/analysis" element={<ReviewScreen />} />
-      <Route path="/game-history" element={<HistoryScreen />} />
-      <Route path="/stats" element={<StatsScreen />} />
-      <Route path="/tutorial" element={<TutorialScreen />} />
-      <Route
-        path="/placeholder"
-        element={
-          <PlaceholderScreen
-            title={strings.placeholder.analysis}
-            message={strings.placeholder.analysis}
-          />
-        }
-      />
-      <Route path="*" element={<Navigate to="/home" replace />} />
-    </Routes>
+    <motion.div
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      transition={pageTransition}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+function AppRoutes() {
+  const location = useLocation()
+
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        <Route path="/home" element={<AnimatedPage><HomeScreen /></AnimatedPage>} />
+        <Route path="/bot-select" element={<AnimatedPage><BotSelectScreen /></AnimatedPage>} />
+        <Route path="/game" element={<AnimatedPage><GameScreen /></AnimatedPage>} />
+        <Route path="/settings" element={<AnimatedPage><SettingsScreen /></AnimatedPage>} />
+        <Route path="/analysis" element={<AnimatedPage><ReviewScreen /></AnimatedPage>} />
+        <Route path="/game-history" element={<AnimatedPage><HistoryScreen /></AnimatedPage>} />
+        <Route path="/stats" element={<AnimatedPage><StatsScreen /></AnimatedPage>} />
+        <Route path="/tutorial" element={<AnimatedPage><TutorialScreen /></AnimatedPage>} />
+        <Route
+          path="/placeholder"
+          element={
+            <AnimatedPage>
+              <PlaceholderScreen title="" message="" />
+            </AnimatedPage>
+          }
+        />
+        <Route path="*" element={<Navigate to="/home" replace />} />
+      </Routes>
+    </AnimatePresence>
   )
 }
 

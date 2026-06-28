@@ -89,7 +89,7 @@ export const themes: Themes = {
     stone: '#F2EAD8',
     accent: '#E89B2A',
     text: '#F2EAD8',
-    muted: '#7A7A7C',
+    muted: '#838385',
     classifications: classificationColors,
   },
   'modern-desert': {
@@ -99,7 +99,7 @@ export const themes: Themes = {
     stone: '#FAF6EE',
     accent: '#283766',
     text: '#2A1F18',
-    muted: '#8A6F5A',
+    muted: '#7A5F4A',
     classifications: classificationColors,
   },
 }
