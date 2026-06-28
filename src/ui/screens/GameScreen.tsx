@@ -306,12 +306,6 @@ export function GameScreen() {
   }, [isVsBot, boardFlip, nextViewFromBottom])
 
   useEffect(() => {
-    if (isVsBot || !boardFlip) {
-      setDisplayCurrentPlayer(gameState?.currentPlayer ?? 'bottom')
-    }
-  }, [isVsBot, boardFlip, gameState?.currentPlayer])
-
-  useEffect(() => {
     if (!gameState || !isVsBot || boardLocked) return
     if (gameState.status !== 'in-progress') return
     if (gameState.currentPlayer === humanSide) return
