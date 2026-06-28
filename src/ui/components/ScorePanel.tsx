@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion'
 import type { Side } from '../../engine'
 
 interface ScorePanelProps {
@@ -22,7 +23,17 @@ export function ScorePanel({
 
   return (
     <div className="flex items-center justify-between w-full max-w-xl mx-auto mb-2">
-      <div
+      <motion.div
+        animate={
+          isBottomActive
+            ? { scale: [1, 1.05, 1] }
+            : { scale: 1 }
+        }
+        transition={
+          isBottomActive
+            ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }
+            : { duration: 0 }
+        }
         className={
           'flex flex-col items-center px-4 py-2 rounded-lg ' +
           (isBottomActive ? 'bg-accent/20 text-accent' : 'text-muted')
@@ -30,7 +41,7 @@ export function ScorePanel({
       >
         <span className="text-sm font-medium">{bottomLabel}</span>
         <span className="text-2xl font-bold">{bottomScore}</span>
-      </div>
+      </motion.div>
 
       <div className="text-xs text-muted px-2">
         {currentPlayer === (viewFromBottom ? 'bottom' : 'top')
@@ -38,7 +49,17 @@ export function ScorePanel({
           : '\u25C0'}
       </div>
 
-      <div
+      <motion.div
+        animate={
+          !isBottomActive
+            ? { scale: [1, 1.05, 1] }
+            : { scale: 1 }
+        }
+        transition={
+          !isBottomActive
+            ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }
+            : { duration: 0 }
+        }
         className={
           'flex flex-col items-center px-4 py-2 rounded-lg ' +
           (!isBottomActive ? 'bg-accent/20 text-accent' : 'text-muted')
@@ -46,7 +67,7 @@ export function ScorePanel({
       >
         <span className="text-sm font-medium">{topLabel}</span>
         <span className="text-2xl font-bold">{topScore}</span>
-      </div>
+      </motion.div>
     </div>
   )
 }
