@@ -87,6 +87,7 @@ export function GameScreen() {
   const [prevBoard, setPrevBoard] = useState<number[] | null>(null)
   const [boardLocked, setBoardLocked] = useState(false)
   const [displayViewFromBottom, setDisplayViewFromBottom] = useState(true)
+  const [displayCurrentPlayer, setDisplayCurrentPlayer] = useState<Side>('bottom')
   const [pitCountsVisible, setPitCountsVisible] = useState(false)
 
   const botRequestRef = useRef<BotMoveHandle | null>(null)
@@ -188,6 +189,12 @@ export function GameScreen() {
     const newState = useGameStore.getState().gameState
     if (!newState) return
 
+    setDisplayCurrentPlayer(newState.currentPlayer)
+
+    if (!isVsBot && boardFlip) {
+      setDisplayViewFromBottom(newState.currentPlayer === 'bottom')
+    }
+
     if (newState.status === 'finished') {
       if (soundEnabled) {
         if (newState.winner === 'draw') playGameEndDraw()
@@ -196,10 +203,6 @@ export function GameScreen() {
       }
       triggerHaptic('game-end', hapticsEnabled)
       return
-    }
-
-    if (!isVsBot && boardFlip) {
-      setDisplayViewFromBottom(newState.currentPlayer === 'bottom')
     }
 
     if (isVsBot && newState.currentPlayer !== humanSide) {
@@ -232,9 +235,10 @@ export function GameScreen() {
   }, [effectiveSpeed, soundEnabled, hapticsEnabled])
 
   const handleTakeback = useCallback(() => {
+    if (boardLocked) return
     cancelBot()
     takeback()
-  }, [cancelBot, takeback])
+  }, [cancelBot, takeback, boardLocked])
 
   const handleNewGame = useCallback(() => {
     cancelBot()
@@ -262,9 +266,8 @@ export function GameScreen() {
     () =>
       gameState !== null &&
       gameState.moveHistory.length > 0 &&
-      gameState.status === 'in-progress' &&
-      !boardLocked,
-    [gameState, boardLocked],
+      gameState.status === 'in-progress',
+    [gameState],
   )
 
   const bottomLabel = isVsBot
@@ -303,6 +306,12 @@ export function GameScreen() {
   }, [isVsBot, boardFlip, nextViewFromBottom])
 
   useEffect(() => {
+    if (isVsBot || !boardFlip) {
+      setDisplayCurrentPlayer(gameState?.currentPlayer ?? 'bottom')
+    }
+  }, [isVsBot, boardFlip, gameState?.currentPlayer])
+
+  useEffect(() => {
     if (!gameState || !isVsBot || boardLocked) return
     if (gameState.status !== 'in-progress') return
     if (gameState.currentPlayer === humanSide) return
@@ -321,7 +330,7 @@ export function GameScreen() {
   if (!gameState) return null
 
   const currentPlayerLabel =
-    gameState.currentPlayer === 'bottom' ? bottomLabel : topLabel
+    displayCurrentPlayer === 'bottom' ? bottomLabel : topLabel
 
   const boardKey = displayViewFromBottom ? 'normal' : 'flipped'
 
@@ -335,12 +344,12 @@ export function GameScreen() {
         >
           &larr; {strings.game.home}
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {!isVsBot && !boardLocked && gameState.status === 'in-progress' && (
             <button
               type="button"
               onClick={() => setPitCountsVisible((v) => !v)}
-              className="text-accent hover:underline text-xs"
+              className="text-accent/70 hover:text-accent text-xs"
             >
               {pitCountsVisible
                 ? strings.game.hideCounts
@@ -351,7 +360,7 @@ export function GameScreen() {
             <button
               type="button"
               onClick={handleTakeback}
-              className="text-accent hover:underline text-sm"
+              className="text-accent hover:underline text-sm font-medium"
             >
               {strings.game.takeback}
             </button>
@@ -364,38 +373,37 @@ export function GameScreen() {
         topLabel={topLabel}
         bottomScore={gameState.board[6]!}
         topScore={gameState.board[13]!}
-        currentPlayer={gameState.currentPlayer}
+        currentPlayer={displayCurrentPlayer}
         viewFromBottom={displayViewFromBottom}
       />
 
-      {thinking && (
-        <div className="flex items-center gap-2 text-accent text-sm">
-          {strings.game.thinking}
-          <ThinkingDots />
-        </div>
-      )}
+      <div className="h-6 flex items-center justify-center">
+        {thinking && (
+          <div className="flex items-center gap-2 text-accent text-sm">
+            {strings.game.thinking}
+            <ThinkingDots />
+          </div>
+        )}
+      </div>
 
-      <div className="relative w-full max-w-xl mx-auto">
-        <div className="h-6 flex items-center justify-center">
-          {!isVsBot &&
-            boardFlip &&
-            gameState.currentPlayer === (displayViewFromBottom ? 'bottom' : 'top') && (
-              <span className="text-accent text-sm font-medium">
-                {strings.game.passTo} {currentPlayerLabel}
-              </span>
-            )}
-        </div>
+      <div className="h-6 flex items-center justify-center">
+        {!isVsBot &&
+          boardFlip &&
+          displayCurrentPlayer === (displayViewFromBottom ? 'bottom' : 'top') && (
+            <span className="text-accent text-sm font-medium">
+              {strings.game.passTo} {currentPlayerLabel}
+            </span>
+          )}
       </div>
 
       <AnimatePresence mode="wait">
         <motion.div
           key={boardKey}
-          initial={{ rotateY: -90, opacity: 0, scale: 0.95 }}
-          animate={{ rotateY: 0, opacity: 1, scale: 1 }}
-          exit={{ rotateY: 90, opacity: 0, scale: 0.95 }}
-          transition={{ duration: 0.25, ease: 'easeInOut' }}
+          initial={{ rotate: 180, scale: 0.75, opacity: 0 }}
+          animate={{ rotate: 0, scale: 1, opacity: 1 }}
+          exit={{ rotate: -180, scale: 0.75, opacity: 0 }}
+          transition={{ duration: 0.3, ease: 'easeInOut' }}
           className="w-full"
-          style={{ perspective: 1200, backfaceVisibility: 'hidden' }}
         >
           <Board
             gameState={gameState}

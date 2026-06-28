@@ -29,21 +29,31 @@ function getJitteredPositions(
   pitIndex: number,
 ): { x: number; y: number }[] {
   if (count === 0) return []
+  if (count === 1) return [{ x: 0.5, y: 0.5 }]
+  if (count === 2) {
+    const s = pitIndex * 73 + 7
+    const spread = 0.2 + seededRandom(s) * 0.15
+    return [
+      { x: 0.5 - spread, y: 0.5 },
+      { x: 0.5 + spread, y: 0.5 },
+    ]
+  }
+
   const positions: { x: number; y: number }[] = []
-  const cols = Math.max(2, Math.ceil(Math.sqrt(count * 1.3)))
+  const cols = Math.max(2, Math.ceil(Math.sqrt(count)))
   const rows = Math.ceil(count / cols)
 
   for (let i = 0; i < count; i++) {
     const col = i % cols
     const row = Math.floor(i / cols)
-    const seed = pitIndex * 1000 + i * 17 + 3
-    const jx = (seededRandom(seed) - 0.5) * 0.55
-    const jy = (seededRandom(seed + 1) - 0.5) * 0.55
+    const seed = pitIndex * 1000 + i * 137 + count * 53 + 7
+    const jx = (seededRandom(seed) - 0.5) * 0.9
+    const jy = (seededRandom(seed + 1) - 0.5) * 0.9
     const cx = (col + 0.5 + jx) / cols
     const cy = (row + 0.5 + jy) / rows
     positions.push({
-      x: Math.max(0.05, Math.min(0.95, cx)),
-      y: Math.max(0.05, Math.min(0.95, cy)),
+      x: Math.max(0.06, Math.min(0.94, cx)),
+      y: Math.max(0.06, Math.min(0.94, cy)),
     })
   }
   return positions
