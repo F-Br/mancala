@@ -57,6 +57,14 @@ export function HomeScreen() {
 
         <button
           type="button"
+          onClick={() => navigate('/stats')}
+          className="w-full py-3 rounded-xl bg-board/80 text-text font-semibold text-lg hover:bg-board border border-board/50"
+        >
+          {strings.home.statistics}
+        </button>
+
+        <button
+          type="button"
           onClick={() => navigate('/settings')}
           className="w-full py-3 rounded-xl bg-board/80 text-text font-semibold text-lg hover:bg-board border border-board/50"
         >

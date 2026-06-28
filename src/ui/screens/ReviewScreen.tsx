@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate, Navigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   createInitialState,
@@ -11,8 +11,12 @@ import { evaluateExpert } from '../../bots/evaluation'
 import { requestAnalysis } from '../../bots/analysisClient'
 import type { AnalysisHandle } from '../../bots/analysisClient'
 import { useGameStore, type AnalysisCacheEntry, type SavedMeta } from '../../state/gameStore'
+import { useModeStore } from '../../state/modeStore'
 import { useSettingsStore } from '../../state/settingsStore'
+import { useHistoryStore } from '../../state/historyStore'
 import { classificationColors, type ClassificationKey } from '../theme'
+import { shareGame } from '../share'
+import { gameToText } from '../../engine'
 import { strings } from '../strings'
 
 function classifyEvalDrop(drop: number): ClassificationKey {
@@ -433,6 +437,9 @@ function MiniBoardDisplay({
 
 export function ReviewScreen() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const locationState = location.state as { fromHistory?: unknown; shared?: boolean } | null
+
   const gameState = useGameStore((s) => s.gameState)
   const firstPlayer = useGameStore((s) => s.firstPlayer)
   const rules = useGameStore((s) => s.rules)
@@ -440,7 +447,9 @@ export function ReviewScreen() {
   const analysisCache = useGameStore((s) => s.analysisCache)
   const setAnalysisCache = useGameStore((s) => s.setAnalysisCache)
 
+  const updateAnalysisInHistory = useHistoryStore((s) => s.updateAnalysis)
   const boardFlip = useSettingsStore((s) => s.boardFlip)
+  const animationSpeed = useSettingsStore((s) => s.animationSpeed)
 
   const [analyzing, setAnalyzing] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
@@ -450,10 +459,16 @@ export function ReviewScreen() {
   const [localCache, setLocalCache] = useState<AnalysisCacheEntry[] | null>(
     null,
   )
+  const [playing, setPlaying] = useState(false)
+  const [shareStatus, setShareStatus] = useState<string | null>(null)
 
   const analysisRef = useRef<AnalysisHandle | null>(null)
   const pvTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pvIndexAtStart = useRef<number | null>(null)
+  const playbackRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const updateHistoryRef = useRef(false)
+
+  const effectiveSpeed = animationSpeed > 0 ? animationSpeed : 1
 
   const playerSide: Side | null = savedMeta?.mode === 'vs-bot'
     ? savedMeta.playerSide === 'random' ? 'bottom' : savedMeta.playerSide
@@ -555,6 +570,7 @@ export function ReviewScreen() {
     setLocalCache(entries)
     setAnalysisCache(entries)
     setAnalyzing(false)
+    updateHistoryRef.current = true
   }, [gameState, positions, rules, setAnalysisCache])
 
   useEffect(() => {
@@ -563,9 +579,18 @@ export function ReviewScreen() {
   }, [cache, runBatchAnalysis])
 
   useEffect(() => {
+    if (updateHistoryRef.current && cache && gameState) {
+      updateHistoryRef.current = false
+      const gt = gameToText(gameState)
+      updateAnalysisInHistory(gt, cache)
+    }
+  }, [cache, gameState, updateAnalysisInHistory])
+
+  useEffect(() => {
     return () => {
       if (analysisRef.current) analysisRef.current.cancel()
       if (pvTimerRef.current) clearInterval(pvTimerRef.current)
+      if (playbackRef.current) clearInterval(playbackRef.current)
     }
   }, [])
 
@@ -615,12 +640,7 @@ export function ReviewScreen() {
     for (const pit of pvMoves) {
       result.push({ pit, player: s.currentPlayer })
       const child = applyMove(s, pit, rules)
-      const lastMove = child.moveHistory[child.moveHistory.length - 1]
-      if (lastMove?.wasExtraTurn) {
-        s = child
-      } else {
-        s = child
-      }
+      s = child
     }
     return result
   }, [currentPos, pvMoves, rules])
@@ -628,7 +648,6 @@ export function ReviewScreen() {
   const handlePVPlayback = useCallback(() => {
     if (pvStates.length === 0) return
     if (showPV) {
-      // Already playing — restart from beginning
       if (pvTimerRef.current) clearInterval(pvTimerRef.current)
       setPvStep(0)
       pvTimerRef.current = setInterval(() => {
@@ -669,17 +688,62 @@ export function ReviewScreen() {
     [],
   )
 
+  // Playback scrubber
+  const togglePlayback = useCallback(() => {
+    setPlaying((prev) => !prev)
+  }, [])
+
+  useEffect(() => {
+    if (!playing) {
+      if (playbackRef.current) {
+        clearInterval(playbackRef.current)
+        playbackRef.current = null
+      }
+      return
+    }
+
+    const interval = Math.max(400, Math.round(1200 / effectiveSpeed))
+    playbackRef.current = setInterval(() => {
+      setCurrentIndex((prev) => {
+        const next = prev + 1
+        if (next >= positions.length) {
+          setPlaying(false)
+          return prev
+        }
+        return next
+      })
+    }, interval)
+
+    return () => {
+      if (playbackRef.current) {
+        clearInterval(playbackRef.current)
+        playbackRef.current = null
+      }
+    }
+  }, [playing, positions.length, effectiveSpeed])
+
+  const handleScrub = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = Number(e.target.value)
+    setCurrentIndex(val)
+    setPlaying(false)
+  }, [])
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') {
         setCurrentIndex((prev) => Math.max(0, prev - 1))
+        setPlaying(false)
       } else if (e.key === 'ArrowRight') {
         setCurrentIndex((prev) =>
           Math.min(positions.length - 1, prev + 1),
         )
+        setPlaying(false)
+      } else if (e.key === ' ') {
+        e.preventDefault()
+        if (positions.length > 1) togglePlayback()
       }
     },
-    [positions.length],
+    [positions.length, togglePlayback],
   )
 
   useEffect(() => {
@@ -704,6 +768,35 @@ export function ReviewScreen() {
         ? currentEntry.bestPitIndex
         : null
 
+  // Handle shared game (read-only) and fromHistory
+  const isShared = locationState?.shared === true
+  const isFromHistory = locationState?.fromHistory !== undefined
+  const readOnly = isShared || isFromHistory
+
+  const handlePlayFromHere = useCallback(() => {
+    if (!currentPos) return
+    useGameStore.getState().clear()
+    useGameStore.setState({
+      gameState: cloneState(currentPos.state),
+      savedMeta: null,
+    })
+    useModeStore.getState().setMode(null)
+    navigate('/game')
+  }, [currentPos, navigate])
+
+  const handleShare = useCallback(async () => {
+    if (!gameState) return
+    const gs = gameState
+    const text = gameToText(gs)
+    try {
+      await shareGame(text, 'mancala game replay')
+      setShareStatus(strings.game.shareCopied)
+    } catch {
+      setShareStatus(strings.game.shareFailed)
+    }
+    setTimeout(() => setShareStatus(null), 3000)
+  }, [gameState])
+
   if (!gameState && !localCache) {
     if (!useGameStore.getState().gameState) {
       return <Navigate to="/home" replace />
@@ -715,16 +808,44 @@ export function ReviewScreen() {
 
   return (
     <div className="min-h-screen p-3 md:p-4 flex flex-col items-center gap-4 max-w-2xl mx-auto">
+      {shareStatus && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-accent text-bg text-sm px-4 py-2 rounded-lg shadow-lg">
+          {shareStatus}
+        </div>
+      )}
+
       <div className="flex items-center justify-between w-full">
         <button
           type="button"
-          onClick={() => navigate('/game')}
+          onClick={() => {
+            if (isShared) navigate('/home')
+            else navigate('/game')
+          }}
           className="text-accent hover:underline text-sm"
         >
-          &larr; {strings.review.backToGame}
+          &larr; {readOnly ? strings.game.home : strings.review.backToGame}
         </button>
-        <h1 className="text-lg font-bold text-text">{strings.review.title}</h1>
-        <div className="w-12" />
+        <h1 className="text-lg font-bold text-text">
+          {isShared ? strings.shared.readOnlyReview : strings.review.title}
+        </h1>
+        <div className="flex gap-2">
+          {isShared && currentPos && (
+            <button
+              type="button"
+              onClick={handlePlayFromHere}
+              className="text-accent hover:underline text-xs"
+            >
+              {strings.shared.playFromHere}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleShare}
+            className="text-accent hover:underline text-xs"
+          >
+            {strings.review.shareGame}
+          </button>
+        </div>
       </div>
 
       {analyzing && (
@@ -760,13 +881,14 @@ export function ReviewScreen() {
           </div>
 
           {displayState && (
-            <div className="flex flex-col items-center gap-2">
+            <div className="flex flex-col items-center gap-2 w-full">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
                     setCurrentIndex((prev) => Math.max(0, prev - 1))
-                  }
+                    setPlaying(false)
+                  }}
                   disabled={currentIndex === 0}
                   className="text-accent disabled:opacity-30 text-lg"
                 >
@@ -779,16 +901,40 @@ export function ReviewScreen() {
                 />
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
                     setCurrentIndex((prev) =>
                       Math.min(maxIndex, prev + 1),
                     )
-                  }
+                    setPlaying(false)
+                  }}
                   disabled={currentIndex >= maxIndex}
                   className="text-accent disabled:opacity-30 text-lg"
                 >
                   &#9654;
                 </button>
+              </div>
+
+              {/* Scrubber bar */}
+              <div className="flex items-center gap-2 w-full max-w-xs">
+                <button
+                  type="button"
+                  onClick={togglePlayback}
+                  disabled={maxIndex <= 0}
+                  className="text-accent disabled:opacity-30 text-sm font-medium w-12"
+                >
+                  {playing ? '\u23F8' : '\u25B6'}
+                </button>
+                <input
+                  type="range"
+                  min={0}
+                  max={maxIndex}
+                  value={currentIndex}
+                  onChange={handleScrub}
+                  className="flex-1 accent-accent h-1"
+                />
+                <span className="text-xs text-muted w-10 text-right font-mono">
+                  {currentIndex}/{maxIndex}
+                </span>
               </div>
 
               <div className="text-xs text-muted text-center">
@@ -873,13 +1019,16 @@ export function ReviewScreen() {
               positions={positions}
               cache={cache}
               currentIndex={currentIndex}
-              onSelect={setCurrentIndex}
+              onSelect={(idx) => {
+                setCurrentIndex(idx)
+                setPlaying(false)
+              }}
               savedMeta={savedMeta}
             />
           </div>
 
           <p className="text-[10px] text-muted/50 mt-2">
-            &larr; &rarr; keys to scrub &middot; Click a move to jump &middot; Click graph point to navigate
+            &larr; &rarr; keys to scrub &middot; Space to play/pause &middot; Click a move to jump &middot; Click graph point to navigate
           </p>
         </>
       )}

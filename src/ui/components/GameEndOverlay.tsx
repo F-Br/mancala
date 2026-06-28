@@ -8,6 +8,7 @@ interface GameEndOverlayProps {
   onNewGame: () => void
   onReview: () => void
   onHome: () => void
+  onShare?: () => void
 }
 
 export function GameEndOverlay({
@@ -17,6 +18,7 @@ export function GameEndOverlay({
   onNewGame,
   onReview,
   onHome,
+  onShare,
 }: GameEndOverlayProps) {
   const { winner, board } = gameState
 
@@ -51,6 +53,15 @@ export function GameEndOverlay({
           >
             {strings.game.reviewGame}
           </button>
+          {onShare && (
+            <button
+              type="button"
+              onClick={onShare}
+              className="w-full py-2 rounded-xl border border-board/60 text-text font-medium hover:bg-board/40"
+            >
+              {strings.game.shareGame}
+            </button>
+          )}
           <button
             type="button"
             onClick={onHome}

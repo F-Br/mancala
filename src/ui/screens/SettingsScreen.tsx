@@ -132,6 +132,7 @@ export function SettingsScreen() {
 
         <button
           type="button"
+          onClick={() => navigate('/tutorial')}
           className="w-full py-2 rounded-xl border border-board/60 text-text font-medium hover:bg-board/40 text-sm"
         >
           {strings.settings.replayTutorial}

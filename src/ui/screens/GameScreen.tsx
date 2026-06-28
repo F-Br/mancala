@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { legalMoves } from '../../engine'
+import { legalMoves, gameToText } from '../../engine'
 import type { GameState as EngineGameState, Move, Side } from '../../engine'
 import { requestBotMove, terminateBotWorker } from '../../bots/client'
 import type { BotMoveHandle } from '../../bots/client'
@@ -10,6 +10,7 @@ import type { AnalysisHandle } from '../../bots/analysisClient'
 import { useGameStore } from '../../state/gameStore'
 import { useModeStore } from '../../state/modeStore'
 import { useSettingsStore } from '../../state/settingsStore'
+import { useHistoryStore, type GameRecord } from '../../state/historyStore'
 import { getAudioContext } from '../../audio/synth'
 import {
   playPlacement,
@@ -24,6 +25,7 @@ import { Board } from '../components/Board'
 import { ScorePanel } from '../components/ScorePanel'
 import { MoveList } from '../components/MoveList'
 import { GameEndOverlay } from '../components/GameEndOverlay'
+import { shareGame } from '../share'
 import { strings } from '../strings'
 
 function usePrefersReducedMotion(): boolean {
@@ -111,6 +113,9 @@ export function GameScreen() {
   const takeback = useGameStore((s) => s.takeback)
   const setSavedMeta = useGameStore((s) => s.setSavedMeta)
   const clear = useGameStore((s) => s.clear)
+  const savedMeta = useGameStore((s) => s.savedMeta)
+
+  const addRecord = useHistoryStore((s) => s.addRecord)
 
   const boardFlip = useSettingsStore((s) => s.boardFlip)
   const animationSpeed = useSettingsStore((s) => s.animationSpeed)
@@ -137,6 +142,7 @@ export function GameScreen() {
   const [liveHintVisible, setLiveHintVisible] = useState(false)
   const [hintLoading, setHintLoading] = useState(false)
   const [oneShotHintPit, setOneShotHintPit] = useState<number | null>(null)
+  const [shareStatus, setShareStatus] = useState<string | null>(null)
 
   const botRequestRef = useRef<BotMoveHandle | null>(null)
   const botInFlight = useRef(false)
@@ -144,6 +150,7 @@ export function GameScreen() {
   const analysisRef = useRef<AnalysisHandle | null>(null)
   const lastAnalyzedMoveCount = useRef(-1)
   const hintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const savedToHistoryRef = useRef(false)
 
   const isVsBot = mode === 'vs-bot'
 
@@ -300,6 +307,50 @@ export function GameScreen() {
     hapticsEnabled,
   ])
 
+  const saveToHistory = useCallback(() => {
+    if (savedToHistoryRef.current) return
+    const gs = useGameStore.getState().gameState
+    if (!gs || gs.status !== 'finished') return
+
+    const meta = savedMeta ?? { mode, botLevel, playerSide }
+    if (!meta.mode) return
+
+    const humanSideActual = meta.mode === 'vs-bot'
+      ? meta.playerSide === 'random' ? 'bottom' : meta.playerSide
+      : null
+
+    const playerScore = gs.board[humanSideActual === 'top' ? 13 : 6]!
+    const opponentScore = gs.board[humanSideActual === 'top' ? 6 : 13]!
+
+    let result: 'win' | 'loss' | 'draw'
+    if (gs.winner === 'draw') {
+      result = 'draw'
+    } else if (meta.mode === 'vs-bot' && humanSideActual) {
+      result = gs.winner === humanSideActual ? 'win' : 'loss'
+    } else {
+      result = gs.winner === 'bottom' ? 'win' : gs.winner === 'top' ? 'loss' : 'draw'
+    }
+
+    const opponentLabel = meta.mode === 'vs-bot'
+      ? `${strings.game.bot}${meta.botLevel ? ' (' + meta.botLevel + ')' : ''}`
+      : strings.game.player2
+
+    const record: GameRecord = {
+      id: crypto.randomUUID(),
+      mode: meta.mode,
+      botLevel: meta.botLevel,
+      playerSide: meta.playerSide,
+      opponentLabel,
+      result,
+      finalScore: { player: playerScore, opponent: opponentScore },
+      gameText: gameToText(gs),
+      dateISO: new Date().toISOString(),
+    }
+
+    addRecord(record)
+    savedToHistoryRef.current = true
+  }, [mode, botLevel, playerSide, savedMeta, addRecord])
+
   const handleStoneLanded = useCallback(
     (stoneIndex: number) => {
       if (effectiveSpeed > 0 && soundEnabled) playPlacement(stoneIndex)
@@ -355,8 +406,22 @@ export function GameScreen() {
   }, [cancelBot, cancelAnalysis, clear, navigate])
 
   const handleReview = useCallback(() => {
+    saveToHistory()
     navigate('/analysis')
-  }, [navigate])
+  }, [navigate, saveToHistory])
+
+  const handleShare = useCallback(async () => {
+    const gs = useGameStore.getState().gameState
+    if (!gs) return
+    const text = gameToText(gs)
+    try {
+      await shareGame(text, 'mancala game')
+      setShareStatus(strings.game.shareCopied)
+    } catch {
+      setShareStatus(strings.game.shareFailed)
+    }
+    setTimeout(() => setShareStatus(null), 3000)
+  }, [])
 
   const handleHint = useCallback(async () => {
     if (!gameState || gameState.status !== 'in-progress' || boardLocked) return
@@ -472,6 +537,12 @@ export function GameScreen() {
     }
   }, [liveHintPit])
 
+  useEffect(() => {
+    if (gameState?.status === 'finished') {
+      saveToHistory()
+    }
+  }, [gameState?.status, saveToHistory])
+
   if (!mode && !gameState) return <Navigate to="/home" replace />
   if (!gameState) return null
 
@@ -519,6 +590,12 @@ export function GameScreen() {
           )}
         </div>
       </div>
+
+      {shareStatus && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-accent text-bg text-sm px-4 py-2 rounded-lg shadow-lg">
+          {shareStatus}
+        </div>
+      )}
 
       <ScorePanel
         bottomLabel={bottomLabel}
@@ -605,6 +682,7 @@ export function GameScreen() {
           onNewGame={handleNewGame}
           onReview={handleReview}
           onHome={handleHome}
+          onShare={handleShare}
         />
       )}
     </div>
