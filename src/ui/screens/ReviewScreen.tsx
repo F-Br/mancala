@@ -10,7 +10,7 @@ import type { GameState, Move, Side, RuleConfig } from '../../engine'
 import { evaluateExpert } from '../../bots/evaluation'
 import { requestAnalysis } from '../../bots/analysisClient'
 import type { AnalysisHandle } from '../../bots/analysisClient'
-import { useGameStore, type AnalysisCacheEntry } from '../../state/gameStore'
+import { useGameStore, type AnalysisCacheEntry, type SavedMeta } from '../../state/gameStore'
 import { useSettingsStore } from '../../state/settingsStore'
 import { classificationColors, type ClassificationKey } from '../theme'
 import { strings } from '../strings'
@@ -40,6 +40,27 @@ interface PositionInfo {
   player: Side
 }
 
+function notatePit(p: number): string {
+  if (p <= 5) return String.fromCharCode(97 + p)
+  return String.fromCharCode(65 + p - 7)
+}
+
+function playerLabel(pos: PositionInfo, savedMeta: SavedMeta | null): string {
+  if (savedMeta?.mode === 'vs-bot') {
+    const human = savedMeta.playerSide === 'random' ? 'bottom' : savedMeta.playerSide
+    return pos.player === human ? strings.game.you : strings.game.bot
+  }
+  return pos.player === 'bottom' ? strings.game.player1 : strings.game.player2
+}
+
+function playerNameShort(side: Side, savedMeta: SavedMeta | null): string {
+  if (savedMeta?.mode === 'vs-bot') {
+    const human = savedMeta.playerSide === 'random' ? 'bottom' : savedMeta.playerSide
+    return side === human ? strings.game.you : strings.game.bot
+  }
+  return side === 'bottom' ? strings.game.player1 : strings.game.player2
+}
+
 function replayPositions(
   gameState: GameState,
   firstPlayer: Side,
@@ -49,23 +70,24 @@ function replayPositions(
   const positions: PositionInfo[] = []
 
   let current = cloneState(initial)
-  positions.push({
-    state: cloneState(current),
-    move: undefined,
-    index: 0,
-    player: current.currentPlayer,
-  })
 
   for (let i = 0; i < gameState.moveHistory.length; i++) {
     const move = gameState.moveHistory[i]!
-    current = applyMove(current, move.pitIndex, rules)
     positions.push({
       state: cloneState(current),
       move,
-      index: i + 1,
+      index: i,
       player: move.player,
     })
+    current = applyMove(current, move.pitIndex, rules)
   }
+
+  positions.push({
+    state: cloneState(current),
+    move: undefined,
+    index: gameState.moveHistory.length,
+    player: current.currentPlayer,
+  })
 
   return positions
 }
@@ -79,14 +101,15 @@ function EvalGraph({
   cache: AnalysisCacheEntry[]
   playerSide: Side | null
 }) {
-  const dataPoints = cache.map((entry, i) => {
-    const pos = positions[i]
-    if (!pos) return null
+  const movePositions = positions.filter((p) => p.move)
+  const dataPoints = movePositions.map((pos) => {
+    const entry = cache[pos.index]
+    if (!entry) return null
     let clampedEval = Math.max(-15, Math.min(15, entry.bestEval))
     if (playerSide && pos.player !== playerSide) {
       clampedEval = -clampedEval
     }
-    return { x: i, eval: clampedEval }
+    return { x: pos.index, eval: clampedEval }
   })
 
   const valid = dataPoints.filter((d): d is { x: number; eval: number } => d !== null)
@@ -162,19 +185,19 @@ function MoveListPanel({
   cache,
   currentIndex,
   onSelect,
-  playerSide,
+  savedMeta,
 }: {
   positions: PositionInfo[]
   cache: AnalysisCacheEntry[]
   currentIndex: number
   onSelect: (index: number) => void
-  playerSide: Side | null
+  savedMeta: SavedMeta | null
 }) {
-  const moves = positions.slice(1)
+  const movePositions = positions.filter((p) => p.move)
 
   return (
     <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto">
-      {moves.map((pos, i) => {
+      {movePositions.map((pos) => {
         const entry = cache[pos.index]
         if (!entry) return null
 
@@ -185,16 +208,13 @@ function MoveListPanel({
         const cls = isBest ? 'best' : classifyEvalDrop(evalDrop)
         const color = classificationColors[cls]
 
-        const notate = (p: number) => {
-          if (p <= 5) return String.fromCharCode(97 + p)
-          return String.fromCharCode(65 + p - 7)
-        }
-        const playedNotation = notate(playedMove.pitIndex)
-        const bestNotation = notate(entry.bestPitIndex)
+        const playedNotation = notatePit(playedMove.pitIndex)
+        const bestNotation = notatePit(entry.bestPitIndex)
 
         const moveNum = Math.floor(index / 2) + 1
         const isEven = index % 2 === 1
         const label = isEven ? `${moveNum}.` : '...'
+        const who = playerLabel(pos, savedMeta)
 
         return (
           <button
@@ -215,10 +235,13 @@ function MoveListPanel({
             <span className="text-muted w-8 text-left text-xs">
               {label}
             </span>
+            <span className="text-muted/60 w-5 text-right text-[10px]">
+              {who.charAt(0)}
+            </span>
             <span className="font-mono font-bold">{playedNotation}</span>
             {!isBest && playedNotation !== bestNotation && (
-              <span className="text-muted text-xs">
-                ({strings.review.recommended} {bestNotation})
+              <span className="text-muted text-xs ml-1">
+                (&rarr; {bestNotation})
               </span>
             )}
             {!isBest && (
@@ -326,15 +349,16 @@ export function ReviewScreen() {
   }, [gameState, firstPlayer, rules])
 
   const runBatchAnalysis = useCallback(async () => {
-    if (!gameState || positions.length === 0) return
+    if (!gameState || positions.length <= 1) return
+    const moveCount = gameState.moveHistory.length
     setAnalyzing(true)
-    setProgress({ current: 0, total: gameState.moveHistory.length })
+    setProgress({ current: 0, total: moveCount })
 
     const entries: AnalysisCacheEntry[] = []
 
-    for (let i = 0; i < gameState.moveHistory.length; i++) {
+    for (let i = 0; i < moveCount; i++) {
       const pos = positions[i]
-      if (!pos || pos.state.status !== 'in-progress') {
+      if (!pos || !pos.move || pos.state.status !== 'in-progress') {
         entries.push({
           bestPitIndex: -1,
           bestEval: 0,
@@ -342,7 +366,7 @@ export function ReviewScreen() {
           depth: 0,
           playedEval: 0,
         })
-        setProgress({ current: i + 1, total: gameState.moveHistory.length })
+        setProgress({ current: i + 1, total: moveCount })
         continue
       }
 
@@ -352,7 +376,7 @@ export function ReviewScreen() {
         const result = await handle.promise
         analysisRef.current = null
 
-        const playedMove = gameState.moveHistory[i]!
+        const playedMove = pos.move
 
         if (
           playedMove.pitIndex === result.pitIndex ||
@@ -377,7 +401,9 @@ export function ReviewScreen() {
               childState,
               rules,
             )
-            playedEval = playedMove.wasExtraTurn
+            const childMove =
+              childState.moveHistory[childState.moveHistory.length - 1]
+            playedEval = childMove?.wasExtraTurn
               ? childEval
               : -childEval
           } catch {
@@ -405,7 +431,7 @@ export function ReviewScreen() {
         })
       }
 
-      setProgress({ current: i + 1, total: gameState.moveHistory.length })
+      setProgress({ current: i + 1, total: moveCount })
     }
 
     setLocalCache(entries)
@@ -428,8 +454,9 @@ export function ReviewScreen() {
   const currentPos = positions[currentIndex]
   const currentEntry = cache ? cache[currentIndex] : null
 
-  const isHumanMove =
+  const isHumanTurn =
     currentPos &&
+    currentPos.move &&
     (savedMeta?.mode !== 'vs-bot' ||
       currentPos.player === playerSide)
 
@@ -440,6 +467,7 @@ export function ReviewScreen() {
     currentPos.move.pitIndex !== currentEntry.bestPitIndex
 
   const pvMoves = currentEntry?.pv ?? []
+
   const pvStates = useMemo(() => {
     if (!currentPos || pvMoves.length === 0) return []
     const states: GameState[] = []
@@ -449,6 +477,23 @@ export function ReviewScreen() {
       states.push(cloneState(s))
     }
     return states
+  }, [currentPos, pvMoves, rules])
+
+  const pvMovesWithPlayers = useMemo(() => {
+    if (!currentPos || pvMoves.length === 0) return []
+    const result: { pit: number; player: Side }[] = []
+    let s = cloneState(currentPos.state)
+    for (const pit of pvMoves) {
+      result.push({ pit, player: s.currentPlayer })
+      const child = applyMove(s, pit, rules)
+      const lastMove = child.moveHistory[child.moveHistory.length - 1]
+      if (lastMove?.wasExtraTurn) {
+        s = child
+      } else {
+        s = child
+      }
+    }
+    return result
   }, [currentPos, pvMoves, rules])
 
   const handlePVPlayback = useCallback(() => {
@@ -461,12 +506,12 @@ export function ReviewScreen() {
         const next = prev + 1
         if (next >= pvStates.length) {
           if (pvTimerRef.current) clearInterval(pvTimerRef.current)
-          setTimeout(() => setShowPV(false), 800)
+          setTimeout(() => setShowPV(false), 1200)
           return prev
         }
         return next
       })
-    }, 600)
+    }, 1200)
   }, [pvStates])
 
   const handleKeyDown = useCallback(
@@ -510,6 +555,8 @@ export function ReviewScreen() {
     }
   }
   if (!gameState) return null
+
+  const maxIndex = positions.length - 1
 
   return (
     <div className="min-h-screen p-3 md:p-4 flex flex-col items-center gap-4 max-w-2xl mx-auto">
@@ -577,10 +624,10 @@ export function ReviewScreen() {
                   type="button"
                   onClick={() =>
                     setCurrentIndex((prev) =>
-                      Math.min(positions.length - 1, prev + 1),
+                      Math.min(maxIndex, prev + 1),
                     )
                   }
-                  disabled={currentIndex >= positions.length - 1}
+                  disabled={currentIndex >= maxIndex}
                   className="text-accent disabled:opacity-30 text-lg"
                 >
                   &#9654;
@@ -589,20 +636,25 @@ export function ReviewScreen() {
 
               <div className="text-xs text-muted text-center">
                 {currentPos?.move
-                  ? currentPos.player === 'bottom'
-                    ? strings.game.player1
-                    : strings.game.player2
+                  ? `${playerLabel(currentPos, savedMeta)}`
                   : 'Start'}
                 {currentPos?.move && (
-                  <span className="ml-1 text-text">
-                    {currentPos.move.player === 'bottom'
-                      ? String.fromCharCode(97 + currentPos.move.pitIndex)
-                      : String.fromCharCode(65 + currentPos.move.pitIndex - 7)}
+                  <span className="ml-1 text-text font-mono">
+                    {notatePit(currentPos.move.pitIndex)}
                   </span>
                 )}
               </div>
 
-              {playedMoveNotBest && !showPV && isHumanMove && (
+              {playedMoveNotBest && !showPV && currentEntry && (
+                <div className="text-xs text-muted">
+                  {strings.review.recommended}:{' '}
+                  <span className="text-accent font-mono">
+                    {notatePit(currentEntry.bestPitIndex)}
+                  </span>
+                </div>
+              )}
+
+              {playedMoveNotBest && !showPV && isHumanTurn && (
                 <button
                   type="button"
                   onClick={handlePVPlayback}
@@ -613,37 +665,41 @@ export function ReviewScreen() {
               )}
 
               {showPV && (
-                <div className="text-xs text-accent animate-pulse">
-                  {strings.review.recommended} —{' '}
-                  {pvMoves
-                    .slice(0, pvStep)
-                    .map((p) =>
-                      p <= 5
-                        ? String.fromCharCode(97 + p)
-                        : String.fromCharCode(65 + p - 7),
-                    )
-                    .join(' ')}
-                </div>
+                <motion.div
+                  initial={{ opacity: 0, y: 2 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-xs text-accent font-medium"
+                >
+                  {strings.review.recommended}
+                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 justify-center mt-1">
+                    {pvMovesWithPlayers.slice(0, pvStep + 1).map((m, i) => (
+                      <span
+                        key={i}
+                        className={
+                          'inline-flex items-center gap-1 px-1.5 py-0.5 rounded ' +
+                          (i === pvStep
+                            ? 'bg-accent/20 text-accent'
+                            : 'text-muted')
+                        }
+                      >
+                        <span className="text-[10px] opacity-70">
+                          {playerNameShort(m.player, savedMeta)}
+                        </span>
+                        <span className="font-mono font-bold">
+                          {notatePit(m.pit)}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </motion.div>
               )}
 
-              {playedMoveNotBest &&
-                !showPV &&
-                !isHumanMove &&
-                currentEntry && (
-                  <div className="text-xs text-muted">
-                    {strings.review.recommended}:{' '}
-                    {currentEntry.pv.length > 0
-                      ? currentEntry.pv
-                          .slice(0, 4)
-                          .map((p) =>
-                            p <= 5
-                              ? String.fromCharCode(97 + p)
-                              : String.fromCharCode(65 + p - 7),
-                          )
-                          .join(' ')
-                      : strings.review.noPV}
-                  </div>
-                )}
+              {showPV && (
+                <p className="text-[10px] text-muted/50">
+                  Animating engine&rsquo;s principal variation &middot; press &ldquo;See
+                  what should have happened&rdquo; again to restart
+                </p>
+              )}
             </div>
           )}
 
@@ -654,7 +710,7 @@ export function ReviewScreen() {
               cache={cache}
               currentIndex={currentIndex}
               onSelect={setCurrentIndex}
-              playerSide={playerSide}
+              savedMeta={savedMeta}
             />
           </div>
 
