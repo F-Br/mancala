@@ -101,15 +101,14 @@ function computeMoveDetails(
     rules.captureRule === 'kalah-standard' &&
     isOwnPit(lastPos, currentPlayer, pitsPerSide) &&
     /*
-     * Capture eligibility:
-     * The pit must have been empty before this move started.
-     * We check the original board to determine this.
-     * If earlier stones from the same sowing wrap-around landed in lastPos,
-     * those stones remain; only the last stone plus the opposite pit
-     * stones are captured. This matches the most common tournament
-     * interpretation of Kalah(6,4).
+     * Capture eligibility: the pit must have been empty just before the
+     * last stone landed.  This is equivalent to checking that exactly one
+     * stone from this entire sowing ended up in the pit — which must be
+     * the last one.  This correctly allows capture on the source pit
+     * (picked up then only the last stone lands back) and prevents it
+     * when earlier wrap-around stones already landed there.
      */
-    board[lastPos] === 0
+    newBoard[lastPos] === 1
   ) {
     const oppIdx = oppositePit(lastPos, pitsPerSide)
     const oppositeStones = newBoard[oppIdx]!

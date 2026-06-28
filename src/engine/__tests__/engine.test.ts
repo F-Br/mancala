@@ -232,27 +232,28 @@ describe('applyMove — basic sowing', () => {
     expect(move.sowedTo).toEqual([8, 9, 10, 11, 12, 13, 0, 1])
   })
 
-  it('sow with wrap-around places stones back into source pit', () => {
-    // Pit 0 with 13 stones; other pits have stones to prevent capture/game end
-    // 13 stones sow: 1,2,3,4,5,6,7,8,9,10,11,12,0 (skip 13)
-    // Pit 0 receives stone #13 (the last one) back
-    const board = makeBoard([13, 1, 1, 1, 1, 1])
-    board[7] = 1
-    board[8] = 1
-    board[9] = 1
-    board[10] = 1
-    board[11] = 1
-    board[12] = 1
+  it('sow with wrap-around places stones back into source pit (not skipped unlike Oware)', () => {
+    // Pit 0 has 14 stones. 14 stones sow: 1,2,...,12,0,1 (skip 13).
+    // Source pit 0 receives stone #13 → board[0] = 1 (source is NOT skipped).
+    // Last stone lands at pit 1; all pits start with 2 stones so newBoard[1] = 4 (not 1),
+    // no capture triggers. We only verify the source pit is included in the sow.
+    const board = makeBoard([14, 2, 2, 2, 2, 2])
+    board[7] = 2
+    board[8] = 2
+    board[9] = 2
+    board[10] = 2
+    board[11] = 2
+    board[12] = 2
 
     const state = makeState({ board, currentPlayer: 'bottom' })
     const result = applyMove(state, 0)
 
-    expect(result.board[0]).toBe(1) // was 13, picked up, got 1 back
-    expect(result.board[1]).toBe(2) // had 1, got 1
-    expect(result.board[6]).toBe(1) // stone reached store
+    expect(result.board[0]).toBe(1) // source pit received stone #13
+    expect(result.board[1]).toBe(4) // 2 original + stones #1 and #14
+    expect(result.board[6]).toBe(1) // stone #6 landed in store
 
     const move = result.moveHistory[0]!
-    expect(move.sowedTo[move.sowedTo.length - 1]).toBe(0)
+    expect(move.sowedTo[move.sowedTo.length - 1]).toBe(1) // last stone at pit 1
   })
 })
 
@@ -468,13 +469,12 @@ describe('applyMove — capture', () => {
     expect(move.captured).toBeNull()
   })
 
-  it('capture when pit was empty at start but received earlier stones from same sow', () => {
+  it('no capture when wrap-around deposits multiple stones in landing pit', () => {
     // Pit 0 has 14 stones. Pit 1 empty. Opposite pit 11 has 3 stones.
     // Sow: 14 stones, 13 positions per lap (skip 13).
-    // Stones 1-12 go to pits 1-12. Stone 13 goes to pit 0. Stone 14 goes to pit 1.
-    // Pit 1 was empty, now has stone #1 and #14 → newBoard[1] = 2.
-    // Capture: board[1] was 0 → capture check. opposite(1)=11, newBoard[11] had 3.
-    // Captured: 1 (last) + 3 = 4. newBoard[1] becomes 1 (stone #1 stays).
+    // Stones: 1:1, 2:2, ..., 12:12, 13:0, 14:1
+    // Pit 1 receives stone #1 and #14 → newBoard[1] = 2.
+    // newBoard[1] !== 1 → no capture, stone #1 stays, stone #14 stays.
     const board = makeBoard([14, 0, 0, 0, 0, 0])
     board[7] = 0
     board[8] = 0
@@ -487,20 +487,47 @@ describe('applyMove — capture', () => {
     const state = makeState({ board, currentPlayer: 'bottom' })
     const result = applyMove(state, 0)
 
-    expect(result.board[1]).toBe(1)
-    expect(result.board[11]).toBe(0)
-    expect(result.board[0]).toBe(1)
-
-    // After sow: pit 1 has stone #1 and #14 → newBoard[1] = 2
-    // Capture: board[1] was 0 (empty). opposite(1)=11, newBoard[11] was 3+1=4.
-    // Captured: 1 (last) + 4 (opposite incl. stone #11 from this sow) = 5
-    // Store: 0 + 1 (stone #6) + 5 (capture) = 6
-    expect(result.board[BOTTOM_STORE]).toBe(6)
+    // Pit 1 has 2 stones (both from this sow), no capture
+    expect(result.board[1]).toBe(2)
+    expect(result.board[11]).toBe(4) // 3 original + 1 from this sow — not captured
+    expect(result.board[0]).toBe(1) // source received stone #13
+    // Stone #6 went to store
+    expect(result.board[BOTTOM_STORE]).toBe(1)
 
     const move = result.moveHistory[0]!
-    expect(move.captured).toEqual({ fromPit: 11, count: 5 })
+    expect(move.captured).toBeNull()
     expect(move.sowedTo).toHaveLength(14)
     expect(move.sowedTo[13]).toBe(1) // 14th stone at pit 1
+  })
+
+  it('capture on source pit when last stone lands there', () => {
+    // Pit 0 has 13 stones. Opposite pit 12 has 4 stones.
+    // Sow 13 stones: 1,2,3,4,5,6,7,8,9,10,11,12,0 (skip 13).
+    // Stone #6 goes to store (+1), stone #12 goes to pit 12 (4→5).
+    // Last stone lands at pit 0 (source).
+    // newBoard[0] = 1 → capture triggers.
+    // Captured: 1 (last at 0) + 5 (opposite pit 12 incl. stone #12) = 6.
+    // Store: 1 (stone #6) + 6 = 7 total.
+    const board = makeBoard([13, 0, 0, 0, 0, 0])
+    board[7] = 0
+    board[8] = 0
+    board[9] = 0
+    board[10] = 0
+    board[11] = 0
+    board[12] = 4 // opposite of pit 0
+    board[BOTTOM_STORE] = 0
+
+    const state = makeState({ board, currentPlayer: 'bottom' })
+    const result = applyMove(state, 0)
+
+    expect(result.board[0]).toBe(0) // captured away
+    expect(result.board[12]).toBe(0) // opposite captured (4 original + 1 from sow)
+    expect(result.board[BOTTOM_STORE]).toBe(7) // 1 (stone #6) + 6 (capture)
+
+    const move = result.moveHistory[0]!
+    expect(move.captured).toEqual({ fromPit: 12, count: 6 })
+    expect(move.sowedTo).toHaveLength(13)
+    expect(move.sowedTo[12]).toBe(0) // 13th stone at pit 0
   })
 })
 
