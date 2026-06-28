@@ -16,7 +16,6 @@ import { classificationColors, type ClassificationKey } from '../theme'
 import { strings } from '../strings'
 
 function classifyEvalDrop(drop: number): ClassificationKey {
-  if (drop <= 0) return 'best'
   if (drop <= 0.3) return 'excellent'
   if (drop <= 1.0) return 'good'
   if (drop <= 2.0) return 'inaccuracy'
@@ -61,6 +60,12 @@ function playerNameShort(side: Side, savedMeta: SavedMeta | null): string {
   return side === 'bottom' ? strings.game.player1 : strings.game.player2
 }
 
+function isHumanPos(pos: PositionInfo, savedMeta: SavedMeta | null): boolean {
+  if (savedMeta?.mode !== 'vs-bot') return false
+  const human = savedMeta.playerSide === 'random' ? 'bottom' : savedMeta.playerSide
+  return pos.player === human
+}
+
 function replayPositions(
   gameState: GameState,
   firstPlayer: Side,
@@ -95,12 +100,22 @@ function replayPositions(
 function EvalGraph({
   positions,
   cache,
-  playerSide,
+  savedMeta,
+  currentIndex,
+  onSelectIndex,
 }: {
   positions: PositionInfo[]
   cache: AnalysisCacheEntry[]
-  playerSide: Side | null
+  savedMeta: SavedMeta | null
+  currentIndex: number
+  onSelectIndex: (index: number) => void
 }) {
+  const [hovered, setHovered] = useState<number | null>(null)
+
+  const playerSide: Side | null = savedMeta?.mode === 'vs-bot'
+    ? savedMeta.playerSide === 'random' ? 'bottom' : savedMeta.playerSide
+    : null
+
   const movePositions = positions.filter((p) => p.move)
   const dataPoints = movePositions.map((pos) => {
     const entry = cache[pos.index]
@@ -109,15 +124,15 @@ function EvalGraph({
     if (playerSide && pos.player !== playerSide) {
       clampedEval = -clampedEval
     }
-    return { x: pos.index, eval: clampedEval }
+    return { x: pos.index, eval: clampedEval, player: pos.player }
   })
 
-  const valid = dataPoints.filter((d): d is { x: number; eval: number } => d !== null)
+  const valid = dataPoints.filter((d): d is { x: number; eval: number; player: Side } => d !== null)
   if (valid.length < 2) return null
 
-  const padding = { left: 32, right: 16, top: 16, bottom: 24 }
-  const width = 600
-  const height = 160
+  const padding = { left: 44, right: 16, top: 20, bottom: 36 }
+  const width = 620
+  const height = 200
   const innerW = width - padding.left - padding.right
   const innerH = height - padding.top - padding.bottom
 
@@ -141,23 +156,75 @@ function EvalGraph({
   ].join(' ')
 
   const zeroY = toY(0)
+  const topLabel = playerSide
+    ? playerNameShort(playerSide, savedMeta)
+    : strings.game.player1
+  const bottomLabel = playerSide
+    ? playerNameShort(playerSide === 'bottom' ? 'top' : 'bottom', savedMeta)
+    : strings.game.player2
 
   return (
     <div className="w-full overflow-x-auto">
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="w-full h-40 md:h-44"
+        className="w-full h-48 md:h-52"
       >
+        {/* Y-axis labels */}
+        <text
+          x={6}
+          y={padding.top + 10}
+          className="text-[8px] fill-muted"
+        >
+          +{maxEval.toFixed(0)}
+        </text>
+        <text
+          x={6}
+          y={zeroY + 3}
+          className="text-[8px] fill-muted"
+        >
+          0
+        </text>
+        <text
+          x={6}
+          y={height - padding.bottom + 6}
+          className="text-[8px] fill-muted"
+        >
+          -{maxEval.toFixed(0)}
+        </text>
+
+        {/* Player advantage labels on Y axis */}
+        <text
+          x={padding.left - 2}
+          y={padding.top - 2}
+          className="text-[8px] fill-muted"
+          textAnchor="end"
+        >
+          {topLabel}
+        </text>
+        <text
+          x={padding.left - 2}
+          y={height - padding.bottom + 10}
+          className="text-[8px] fill-muted"
+          textAnchor="end"
+        >
+          {bottomLabel}
+        </text>
+
+        {/* Zero line */}
         <line
           x1={padding.left}
           y1={zeroY}
           x2={width - padding.right}
           y2={zeroY}
           stroke="currentColor"
-          strokeOpacity={0.15}
+          strokeOpacity={0.12}
           strokeWidth={1}
         />
+
+        {/* Area */}
         <path d={areaPath} fill="var(--theme-accent)" fillOpacity={0.08} />
+
+        {/* Line */}
         <path
           d={linePath}
           fill="none"
@@ -166,15 +233,62 @@ function EvalGraph({
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        {valid.map((d, i) => (
-          <circle
-            key={i}
-            cx={toX(d.x)}
-            cy={toY(d.eval)}
-            r={3}
-            fill="var(--theme-accent)"
-          />
-        ))}
+
+        {/* Data points */}
+        {valid.map((d, i) => {
+          const cx = toX(d.x)
+          const cy = toY(d.eval)
+          const isActive = d.x === currentIndex
+          const isHovered = d.x === hovered
+          return (
+            <g key={i}>
+              {(isHovered || isActive) && (
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={10}
+                  fill="var(--theme-accent)"
+                  fillOpacity={0.15}
+                  className="cursor-pointer"
+                  onClick={() => onSelectIndex(d.x)}
+                />
+              )}
+              <circle
+                cx={cx}
+                cy={cy}
+                r={isActive ? 5 : 3}
+                fill="var(--theme-accent)"
+                fillOpacity={isActive ? 1 : 0.8}
+                className="cursor-pointer"
+                onMouseEnter={() => setHovered(d.x)}
+                onMouseLeave={() => setHovered(null)}
+                onClick={() => onSelectIndex(d.x)}
+              />
+              {isHovered && !isActive && (
+                <>
+                  <rect
+                    x={cx - 18}
+                    y={cy - 24}
+                    width={36}
+                    height={16}
+                    rx={4}
+                    fill="var(--theme-bg)"
+                    stroke="var(--theme-accent)"
+                    strokeWidth={0.5}
+                  />
+                  <text
+                    x={cx}
+                    y={cy - 12}
+                    textAnchor="middle"
+                    className="text-[9px] fill-text"
+                  >
+                    #{d.x + 1}
+                  </text>
+                </>
+              )}
+            </g>
+          )
+        })}
       </svg>
     </div>
   )
@@ -210,11 +324,8 @@ function MoveListPanel({
 
         const playedNotation = notatePit(playedMove.pitIndex)
         const bestNotation = notatePit(entry.bestPitIndex)
-
-        const moveNum = Math.floor(index / 2) + 1
-        const isEven = index % 2 === 1
-        const label = isEven ? `${moveNum}.` : '...'
-        const who = playerLabel(pos, savedMeta)
+        const humanRow = isHumanPos(pos, savedMeta)
+        const isBotMode = savedMeta?.mode === 'vs-bot'
 
         return (
           <button
@@ -225,19 +336,25 @@ function MoveListPanel({
               'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ' +
               (currentIndex === index
                 ? 'bg-accent/15 text-text'
-                : 'hover:bg-board/30 text-text')
+                : isBotMode
+                  ? humanRow
+                    ? 'bg-board/20 hover:bg-board/30 text-text'
+                    : 'bg-board/5 hover:bg-board/20 text-text'
+                  : 'hover:bg-board/30 text-text')
             }
           >
             <span
               className="w-2.5 h-2.5 rounded-full shrink-0"
               style={{ backgroundColor: color }}
             />
-            <span className="text-muted w-8 text-left text-xs">
-              {label}
+            <span className="text-muted w-5 text-left text-xs font-mono">
+              {index + 1}
             </span>
-            <span className="text-muted/60 w-5 text-right text-[10px]">
-              {who.charAt(0)}
-            </span>
+            {isBotMode && (
+              <span className="text-muted/60 w-5 text-right text-[10px]">
+                {humanRow ? 'Y' : 'B'}
+              </span>
+            )}
             <span className="font-mono font-bold">{playedNotation}</span>
             {!isBest && playedNotation !== bestNotation && (
               <span className="text-muted text-xs ml-1">
@@ -245,8 +362,8 @@ function MoveListPanel({
               </span>
             )}
             {!isBest && (
-              <span className="ml-auto text-xs" style={{ color }}>
-                {evalDrop > 0 ? `-${evalDrop.toFixed(1)}` : ''}
+              <span className="ml-auto text-[11px] font-medium" style={{ color }}>
+                {evalDrop > 0.01 ? `-${evalDrop.toFixed(1)}` : ''}
               </span>
             )}
             <span
@@ -336,6 +453,7 @@ export function ReviewScreen() {
 
   const analysisRef = useRef<AnalysisHandle | null>(null)
   const pvTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pvIndexAtStart = useRef<number | null>(null)
 
   const playerSide: Side | null = savedMeta?.mode === 'vs-bot'
     ? savedMeta.playerSide === 'random' ? 'bottom' : savedMeta.playerSide
@@ -451,6 +569,17 @@ export function ReviewScreen() {
     }
   }, [])
 
+  // Reset PV playback when switching to a different row
+  useEffect(() => {
+    if (pvIndexAtStart.current !== null && pvIndexAtStart.current !== currentIndex) {
+      if (pvTimerRef.current) clearInterval(pvTimerRef.current)
+      pvTimerRef.current = null
+      setShowPV(false)
+      setPvStep(0)
+      pvIndexAtStart.current = null
+    }
+  }, [currentIndex])
+
   const currentPos = positions[currentIndex]
   const currentEntry = cache ? cache[currentIndex] : null
 
@@ -498,21 +627,47 @@ export function ReviewScreen() {
 
   const handlePVPlayback = useCallback(() => {
     if (pvStates.length === 0) return
-    setShowPV(true)
-    setPvStep(0)
-    if (pvTimerRef.current) clearInterval(pvTimerRef.current)
-    pvTimerRef.current = setInterval(() => {
-      setPvStep((prev) => {
-        const next = prev + 1
-        if (next >= pvStates.length) {
-          if (pvTimerRef.current) clearInterval(pvTimerRef.current)
-          setTimeout(() => setShowPV(false), 1200)
-          return prev
-        }
-        return next
-      })
-    }, 1200)
-  }, [pvStates])
+    if (showPV) {
+      // Already playing — restart from beginning
+      if (pvTimerRef.current) clearInterval(pvTimerRef.current)
+      setPvStep(0)
+      pvTimerRef.current = setInterval(() => {
+        setPvStep((prev) => {
+          const next = prev + 1
+          if (next >= pvStates.length) {
+            if (pvTimerRef.current) clearInterval(pvTimerRef.current)
+            pvTimerRef.current = null
+            return prev
+          }
+          return next
+        })
+      }, 1200)
+    } else {
+      setShowPV(true)
+      setPvStep(0)
+      pvIndexAtStart.current = currentIndex
+      pvTimerRef.current = setInterval(() => {
+        setPvStep((prev) => {
+          const next = prev + 1
+          if (next >= pvStates.length) {
+            if (pvTimerRef.current) clearInterval(pvTimerRef.current)
+            pvTimerRef.current = null
+            return prev
+          }
+          return next
+        })
+      }, 1200)
+    }
+  }, [pvStates, showPV, currentIndex])
+
+  const handlePVChipClick = useCallback(
+    (step: number) => {
+      if (pvTimerRef.current) clearInterval(pvTimerRef.current)
+      pvTimerRef.current = null
+      setPvStep(step)
+    },
+    [],
+  )
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -598,7 +753,9 @@ export function ReviewScreen() {
             <EvalGraph
               positions={positions}
               cache={cache}
-              playerSide={playerSide}
+              savedMeta={savedMeta}
+              currentIndex={currentIndex}
+              onSelectIndex={setCurrentIndex}
             />
           </div>
 
@@ -672,14 +829,18 @@ export function ReviewScreen() {
                 >
                   {strings.review.recommended}
                   <div className="flex flex-wrap gap-x-2 gap-y-0.5 justify-center mt-1">
-                    {pvMovesWithPlayers.slice(0, pvStep + 1).map((m, i) => (
-                      <span
+                    {pvMovesWithPlayers.map((m, i) => (
+                      <button
                         key={i}
+                        type="button"
+                        onClick={() => {
+                          handlePVChipClick(i)
+                        }}
                         className={
-                          'inline-flex items-center gap-1 px-1.5 py-0.5 rounded ' +
+                          'inline-flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-colors ' +
                           (i === pvStep
-                            ? 'bg-accent/20 text-accent'
-                            : 'text-muted')
+                            ? 'bg-accent/20 text-accent ring-1 ring-accent/50'
+                            : 'text-muted hover:bg-board/40')
                         }
                       >
                         <span className="text-[10px] opacity-70">
@@ -688,17 +849,20 @@ export function ReviewScreen() {
                         <span className="font-mono font-bold">
                           {notatePit(m.pit)}
                         </span>
-                      </span>
+                      </button>
                     ))}
                   </div>
+                  {pvStep < pvStates.length - 1 && (
+                    <p className="text-[10px] text-muted/50 mt-1">
+                      Animating &middot; click any chip to scrub &middot; press &ldquo;See&hellip;&rdquo; again to restart
+                    </p>
+                  )}
+                  {pvStep >= pvStates.length - 1 && (
+                    <p className="text-[10px] text-muted/50 mt-1">
+                      Variation complete &middot; click any chip to review &middot; press &ldquo;See&hellip;&rdquo; to restart
+                    </p>
+                  )}
                 </motion.div>
-              )}
-
-              {showPV && (
-                <p className="text-[10px] text-muted/50">
-                  Animating engine&rsquo;s principal variation &middot; press &ldquo;See
-                  what should have happened&rdquo; again to restart
-                </p>
               )}
             </div>
           )}
@@ -715,7 +879,7 @@ export function ReviewScreen() {
           </div>
 
           <p className="text-[10px] text-muted/50 mt-2">
-            &larr; &rarr; keys to scrub &middot; Click a move to jump
+            &larr; &rarr; keys to scrub &middot; Click a move to jump &middot; Click graph point to navigate
           </p>
         </>
       )}
