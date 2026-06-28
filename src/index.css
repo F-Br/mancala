@@ -1,0 +1,19 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: var(--theme-bg);
+  --color-board: var(--theme-board);
+  --color-pit: var(--theme-pit);
+  --color-stone: var(--theme-stone);
+  --color-accent: var(--theme-accent);
+  --color-text: var(--theme-text);
+  --color-muted: var(--theme-muted);
+}
+
+body {
+  background-color: var(--theme-bg);
+  color: var(--theme-text);
+  transition:
+    background-color 0.3s,
+    color 0.3s;
+}
