@@ -15,6 +15,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--theme-accent', theme.accent)
     root.style.setProperty('--theme-text', theme.text)
     root.style.setProperty('--theme-muted', theme.muted)
+    root.style.setProperty('--theme-best', theme.classifications.best)
+    root.style.setProperty('--theme-excellent', theme.classifications.excellent)
+    root.style.setProperty('--theme-good', theme.classifications.good)
+    root.style.setProperty('--theme-inaccuracy', theme.classifications.inaccuracy)
+    root.style.setProperty('--theme-mistake', theme.classifications.mistake)
+    root.style.setProperty('--theme-blunder', theme.classifications.blunder)
 
     if (!appliedRef.current) {
       root.style.setProperty('background-color', 'var(--theme-bg)')

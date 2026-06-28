@@ -6,6 +6,14 @@ import { KALAH_STANDARD } from '../engine'
 import type { BotLevel } from '../bots/types'
 import type { GameMode } from './modeStore'
 
+export interface AnalysisCacheEntry {
+  bestPitIndex: number
+  bestEval: number
+  pv: number[]
+  depth: number
+  playedEval: number
+}
+
 export interface SavedMeta {
   mode: GameMode
   botLevel: BotLevel
@@ -17,11 +25,13 @@ export interface GameStore {
   rules: RuleConfig
   firstPlayer: Side
   savedMeta: SavedMeta | null
+  analysisCache: AnalysisCacheEntry[] | null
   makeMove: (pitIndex: number) => void
   reset: (firstPlayer?: Side) => void
   takeback: () => void
   clear: () => void
   setSavedMeta: (meta: SavedMeta) => void
+  setAnalysisCache: (cache: AnalysisCacheEntry[] | null) => void
 }
 
 export const useGameStore = create<GameStore>()(
@@ -31,17 +41,18 @@ export const useGameStore = create<GameStore>()(
       rules: KALAH_STANDARD,
       firstPlayer: 'bottom' as Side,
       savedMeta: null,
+      analysisCache: null,
       makeMove: (pitIndex: number) => {
         const { gameState, rules } = get()
         if (!gameState || gameState.status === 'finished') return
         const newState = applyMove(gameState, pitIndex, rules)
-        set({ gameState: newState })
+        set({ gameState: newState, analysisCache: null })
       },
       reset: (firstPlayer?: Side) => {
         const rules = get().rules
         const fp = firstPlayer ?? 'bottom'
         const state = createInitialState(rules, fp)
-        set({ gameState: state, firstPlayer: fp })
+        set({ gameState: state, firstPlayer: fp, analysisCache: null })
       },
       takeback: () => {
         const { gameState, rules, firstPlayer } = get()
@@ -51,10 +62,12 @@ export const useGameStore = create<GameStore>()(
         for (let i = 0; i < gameState.moveHistory.length - 1; i++) {
           prev = applyMove(prev, gameState.moveHistory[i]!.pitIndex, rules)
         }
-        set({ gameState: prev })
+        set({ gameState: prev, analysisCache: null })
       },
-      clear: () => set({ gameState: null, savedMeta: null }),
+      clear: () => set({ gameState: null, savedMeta: null, analysisCache: null }),
       setSavedMeta: (meta: SavedMeta) => set({ savedMeta: meta }),
+      setAnalysisCache: (cache: AnalysisCacheEntry[] | null) =>
+        set({ analysisCache: cache }),
     }),
     {
       name: 'mancala-current-game',
@@ -63,6 +76,7 @@ export const useGameStore = create<GameStore>()(
         rules: state.rules,
         firstPlayer: state.firstPlayer,
         savedMeta: state.savedMeta,
+        analysisCache: state.analysisCache,
       }),
     },
   ),

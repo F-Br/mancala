@@ -4,6 +4,7 @@ import { HomeScreen } from './ui/screens/HomeScreen'
 import { BotSelectScreen } from './ui/screens/BotSelectScreen'
 import { GameScreen } from './ui/screens/GameScreen'
 import { SettingsScreen } from './ui/screens/SettingsScreen'
+import { ReviewScreen } from './ui/screens/ReviewScreen'
 import { PlaceholderScreen } from './ui/screens/PlaceholderScreen'
 import { strings } from './ui/strings'
 
@@ -16,15 +17,7 @@ function App() {
           <Route path="/bot-select" element={<BotSelectScreen />} />
           <Route path="/game" element={<GameScreen />} />
           <Route path="/settings" element={<SettingsScreen />} />
-          <Route
-            path="/analysis"
-            element={
-              <PlaceholderScreen
-                title={strings.game.reviewGame}
-                message={strings.placeholder.analysis}
-              />
-            }
-          />
+          <Route path="/analysis" element={<ReviewScreen />} />
           <Route
             path="/game-history"
             element={

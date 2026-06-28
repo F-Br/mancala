@@ -5,6 +5,8 @@ import { legalMoves } from '../../engine'
 import type { GameState as EngineGameState, Move, Side } from '../../engine'
 import { requestBotMove, terminateBotWorker } from '../../bots/client'
 import type { BotMoveHandle } from '../../bots/client'
+import { requestAnalysis, terminateAnalysisWorker } from '../../bots/analysisClient'
+import type { AnalysisHandle } from '../../bots/analysisClient'
 import { useGameStore } from '../../state/gameStore'
 import { useModeStore } from '../../state/modeStore'
 import { useSettingsStore } from '../../state/settingsStore'
@@ -59,6 +61,44 @@ function ThinkingDots() {
   )
 }
 
+function LiveAnalysisPanel({
+  evalScore,
+  pv,
+  visible,
+}: {
+  evalScore: number
+  pv: number[]
+  visible: boolean
+}) {
+  if (!visible) return null
+  const sign = evalScore >= 0 ? '+' : ''
+  const stones = `${sign}${evalScore.toFixed(1)}`
+
+  const pvNotation = pv
+    .slice(0, 6)
+    .map((p) => {
+      if (p <= 5) return String.fromCharCode(97 + p)
+      return String.fromCharCode(65 + p - 7)
+    })
+    .join(' ')
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-center gap-2 text-xs bg-board/40 rounded-lg px-3 py-1.5 max-w-full overflow-hidden"
+    >
+      <span className="text-accent font-bold text-xs whitespace-nowrap">
+        {strings.game.liveAnalysisOn}
+      </span>
+      <span className="text-text font-mono font-bold">{stones}</span>
+      {pvNotation && (
+        <span className="text-muted truncate">{pvNotation}</span>
+      )}
+    </motion.div>
+  )
+}
+
 export function GameScreen() {
   const navigate = useNavigate()
   const mode = useModeStore((s) => s.mode)
@@ -78,6 +118,7 @@ export function GameScreen() {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled)
   const stonePattern = useSettingsStore((s) => s.stonePattern)
   const showPitCounts = useSettingsStore((s) => s.showPitCounts)
+  const liveHintsEnabled = useSettingsStore((s) => s.liveHintsEnabled)
 
   const prefersReducedMotion = usePrefersReducedMotion()
   const effectiveSpeed = prefersReducedMotion ? 0 : animationSpeed
@@ -90,9 +131,19 @@ export function GameScreen() {
   const [displayCurrentPlayer, setDisplayCurrentPlayer] = useState<Side>('bottom')
   const [pitCountsVisible, setPitCountsVisible] = useState(false)
 
+  const [liveHintPit, setLiveHintPit] = useState<number | null>(null)
+  const [liveHintEval, setLiveHintEval] = useState(0)
+  const [liveHintPV, setLiveHintPV] = useState<number[]>([])
+  const [liveHintVisible, setLiveHintVisible] = useState(false)
+  const [hintLoading, setHintLoading] = useState(false)
+  const [oneShotHintPit, setOneShotHintPit] = useState<number | null>(null)
+
   const botRequestRef = useRef<BotMoveHandle | null>(null)
   const botInFlight = useRef(false)
   const initDone = useRef(false)
+  const analysisRef = useRef<AnalysisHandle | null>(null)
+  const lastAnalyzedMoveCount = useRef(-1)
+  const hintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isVsBot = mode === 'vs-bot'
 
@@ -123,6 +174,38 @@ export function GameScreen() {
     setThinking(false)
     botInFlight.current = false
   }, [])
+
+  const cancelAnalysis = useCallback(() => {
+    if (analysisRef.current) {
+      analysisRef.current.cancel()
+      analysisRef.current = null
+    }
+  }, [])
+
+  const runLiveAnalysis = useCallback(
+    async (state: EngineGameState) => {
+      if (!liveHintsEnabled) return
+      if (state.status !== 'in-progress') return
+      cancelAnalysis()
+
+      try {
+        const handle = await requestAnalysis(state, 800)
+        analysisRef.current = handle
+        const result = await handle.promise
+        analysisRef.current = null
+
+        if (result.pitIndex >= 0) {
+          setLiveHintPit(result.pitIndex)
+          setLiveHintEval(result.evalScore)
+          setLiveHintPV(result.principalVariation)
+          setLiveHintVisible(true)
+        }
+      } catch {
+        analysisRef.current = null
+      }
+    },
+    [liveHintsEnabled, cancelAnalysis],
+  )
 
   const doBotMove = useCallback(
     async (state: EngineGameState) => {
@@ -237,30 +320,68 @@ export function GameScreen() {
   const handleTakeback = useCallback(() => {
     if (boardLocked) return
     cancelBot()
+    cancelAnalysis()
     takeback()
-  }, [cancelBot, takeback, boardLocked])
+  }, [cancelBot, cancelAnalysis, takeback, boardLocked])
 
   const handleNewGame = useCallback(() => {
     cancelBot()
+    cancelAnalysis()
     setBoardLocked(false)
     setPendingMove(null)
     setPrevBoard(null)
     const fp = humanSide ?? 'bottom'
     reset(fp)
     if (mode) setSavedMeta({ mode, botLevel, playerSide })
-  }, [cancelBot, reset, humanSide, mode, botLevel, playerSide, setSavedMeta])
+  }, [
+    cancelBot,
+    cancelAnalysis,
+    reset,
+    humanSide,
+    mode,
+    botLevel,
+    playerSide,
+    setSavedMeta,
+  ])
 
   const handleHome = useCallback(() => {
     cancelBot()
+    cancelAnalysis()
     terminateBotWorker()
+    terminateAnalysisWorker()
     clear()
     useModeStore.getState().setMode(null)
     navigate('/home')
-  }, [cancelBot, clear, navigate])
+  }, [cancelBot, cancelAnalysis, clear, navigate])
 
   const handleReview = useCallback(() => {
     navigate('/analysis')
   }, [navigate])
+
+  const handleHint = useCallback(async () => {
+    if (!gameState || gameState.status !== 'in-progress' || boardLocked) return
+    setHintLoading(true)
+    setOneShotHintPit(null)
+
+    try {
+      const handle = await requestAnalysis(gameState, 2000)
+      analysisRef.current = handle
+      const result = await handle.promise
+      analysisRef.current = null
+
+      if (result.pitIndex >= 0) {
+        setOneShotHintPit(result.pitIndex)
+        if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current)
+        hintTimeoutRef.current = setTimeout(() => {
+          setOneShotHintPit(null)
+        }, 3000)
+      }
+    } catch {
+      analysisRef.current = null
+    } finally {
+      setHintLoading(false)
+    }
+  }, [gameState, boardLocked])
 
   const takebackAllowed = useMemo(
     () =>
@@ -315,10 +436,41 @@ export function GameScreen() {
   }, [gameState, isVsBot, humanSide, doBotMove, boardLocked])
 
   useEffect(() => {
+    if (!gameState || !liveHintsEnabled || boardLocked) {
+      if (!liveHintsEnabled) {
+        setLiveHintVisible(false)
+        setLiveHintPit(null)
+      }
+      return
+    }
+    if (gameState.status !== 'in-progress') return
+    if (gameState.currentPlayer !== humanSide) return
+
+    const moveCount = gameState.moveHistory.length
+    if (moveCount === lastAnalyzedMoveCount.current) return
+    lastAnalyzedMoveCount.current = moveCount
+
+    runLiveAnalysis(gameState)
+  }, [gameState, liveHintsEnabled, humanSide, boardLocked, runLiveAnalysis])
+
+  useEffect(() => {
     return () => {
       cancelBot()
+      cancelAnalysis()
+      if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current)
     }
-  }, [cancelBot])
+  }, [cancelBot, cancelAnalysis])
+
+  useEffect(() => {
+    if (liveHintPit === null) return
+    if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current)
+    hintTimeoutRef.current = setTimeout(() => {
+      setLiveHintPit(null)
+    }, 4000)
+    return () => {
+      if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current)
+    }
+  }, [liveHintPit])
 
   if (!mode && !gameState) return <Navigate to="/home" replace />
   if (!gameState) return null
@@ -327,6 +479,12 @@ export function GameScreen() {
     displayCurrentPlayer === 'bottom' ? bottomLabel : topLabel
 
   const boardKey = displayViewFromBottom ? 'normal' : 'flipped'
+
+  const accentPit = oneShotHintPit ?? liveHintPit
+  const isHumanTurn =
+    gameState.status === 'in-progress' &&
+    (!isVsBot || gameState.currentPlayer === humanSide) &&
+    !boardLocked
 
   return (
     <div className="min-h-screen p-3 md:p-4 flex flex-col items-center gap-3 max-w-4xl mx-auto relative">
@@ -380,14 +538,25 @@ export function GameScreen() {
         )}
       </div>
 
-      <div className="h-6 flex items-center justify-center">
+      <div className="h-6 flex items-center justify-center gap-3">
         {!isVsBot &&
           boardFlip &&
-          displayCurrentPlayer === (displayViewFromBottom ? 'bottom' : 'top') && (
+          displayCurrentPlayer ===
+            (displayViewFromBottom ? 'bottom' : 'top') && (
             <span className="text-accent text-sm font-medium">
               {strings.game.passTo} {currentPlayerLabel}
             </span>
           )}
+        {isHumanTurn && (
+          <button
+            type="button"
+            onClick={handleHint}
+            disabled={hintLoading}
+            className="text-xs text-accent/70 hover:text-accent disabled:opacity-40 font-medium"
+          >
+            {hintLoading ? '...' : strings.game.hint}
+          </button>
+        )}
       </div>
 
       <AnimatePresence mode="wait">
@@ -413,9 +582,18 @@ export function GameScreen() {
             onExtraTurn={handleExtraTurnEvent}
             stonePattern={stonePattern}
             showPitCounts={showPitCounts || pitCountsVisible}
+            accentPit={accentPit}
           />
         </motion.div>
       </AnimatePresence>
+
+      <div className="h-8 flex items-center justify-center">
+        <LiveAnalysisPanel
+          evalScore={liveHintEval}
+          pv={liveHintPV}
+          visible={liveHintVisible && liveHintPit !== null}
+        />
+      </div>
 
       <MoveList moves={gameState.moveHistory} />
 

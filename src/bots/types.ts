@@ -32,3 +32,35 @@ export interface BotError {
 
 export type BotMessage = BotRequest | BotCancelRequest
 export type BotWorkerMessage = BotResponse | BotError
+
+// ── Analysis Worker Protocol ──────────────────────────────────────────────
+
+export interface AnalysisRequest {
+  type: 'analyze'
+  state: GameState
+  timeBudgetMs: number
+  requestId: number
+}
+
+export interface AnalysisCancelRequest {
+  type: 'cancel'
+  requestId: number
+}
+
+export interface AnalysisResponse {
+  type: 'result'
+  pitIndex: number
+  evalScore: number
+  principalVariation: number[]
+  depthReached: number
+  requestId: number
+}
+
+export interface AnalysisError {
+  type: 'error'
+  requestId: number
+  message: string
+}
+
+export type AnalysisMessage = AnalysisRequest | AnalysisCancelRequest
+export type AnalysisWorkerMessage = AnalysisResponse | AnalysisError

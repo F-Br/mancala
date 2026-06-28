@@ -8,6 +8,12 @@
   --color-accent: var(--theme-accent);
   --color-text: var(--theme-text);
   --color-muted: var(--theme-muted);
+  --color-best: var(--theme-best);
+  --color-excellent: var(--theme-excellent);
+  --color-good: var(--theme-good);
+  --color-inaccuracy: var(--theme-inaccuracy);
+  --color-mistake: var(--theme-mistake);
+  --color-blunder: var(--theme-blunder);
 }
 
 body {

@@ -17,6 +17,7 @@ interface BoardProps {
   onExtraTurn?: () => void
   stonePattern?: StonePattern
   showPitCounts?: boolean
+  accentPit?: number | null
 }
 
 function seededRandom(seed: number): number {
@@ -175,6 +176,7 @@ function BoardInner({
   onExtraTurn,
   stonePattern = 'random',
   showPitCounts = false,
+  accentPit = null,
 }: BoardProps) {
   const boardRef = useRef<HTMLDivElement>(null)
 
@@ -360,6 +362,7 @@ function BoardInner({
       const clickable = clickablePits.includes(pitIndex) && !animating
       const count = displayBoard[pitIndex]!
       const enabled = clickable && count > 0
+      const isAccent = accentPit === pitIndex
       return (
         <button
           key={pitIndex}
@@ -369,9 +372,11 @@ function BoardInner({
           disabled={!enabled}
           className={
             'relative w-11 h-11 md:w-14 md:h-14 rounded-xl overflow-hidden border-2 ' +
-            (enabled
-              ? 'bg-pit border-board cursor-pointer hover:scale-105 hover:ring-2 hover:ring-accent active:scale-95 transition-all'
-              : 'bg-pit/50 border-board/50 cursor-default')
+            (isAccent
+              ? 'bg-pit border-accent ring-2 ring-accent cursor-pointer hover:scale-105 active:scale-95 transition-all'
+              : enabled
+                ? 'bg-pit border-board cursor-pointer hover:scale-105 hover:ring-2 hover:ring-accent active:scale-95 transition-all'
+                : 'bg-pit/50 border-board/50 cursor-default')
           }
         >
           <StoneCircles
@@ -391,7 +396,7 @@ function BoardInner({
         </button>
       )
     },
-    [clickablePits, animating, displayBoard, onPitClick, stonePattern, showPitCounts, mirrored],
+    [clickablePits, animating, displayBoard, onPitClick, stonePattern, showPitCounts, mirrored, accentPit],
   )
 
   const renderStore = (storeIndex: number, accent: boolean) => (

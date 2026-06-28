@@ -125,6 +125,7 @@ export function SettingsScreen() {
 
         <ToggleRow
           label={strings.settings.liveHints}
+          description={strings.settings.liveHintsDesc}
           checked={settings.liveHintsEnabled}
           onChange={settings.setLiveHintsEnabled}
         />
