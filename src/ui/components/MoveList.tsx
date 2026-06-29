@@ -17,9 +17,7 @@ export function MoveList({ moves }: MoveListProps) {
             key={i}
             className={
               'text-xs px-2 py-0.5 rounded ' +
-              (move.player === 'bottom'
-                ? 'bg-accent/10 text-accent'
-                : 'bg-accent/5 text-muted')
+              (move.player === 'bottom' ? 'bg-accent/10 text-accent' : 'bg-accent/5 text-muted')
             }
           >
             {i + 1}.{moveToNotation(move)}

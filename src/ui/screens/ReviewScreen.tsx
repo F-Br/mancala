@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Navigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import {
-  createInitialState,
-  applyMove,
-  cloneState,
-} from '../../engine'
+import { createInitialState, applyMove, cloneState } from '../../engine'
 import type { GameState, Move, Side, RuleConfig } from '../../engine'
 import { evaluateExpert } from '../../bots/evaluation'
 import { requestAnalysis } from '../../bots/analysisClient'
@@ -116,11 +112,14 @@ function EvalGraph({
 }) {
   const [hovered, setHovered] = useState<number | null>(null)
 
-  const playerSide: Side | null = savedMeta?.mode === 'vs-bot'
-    ? savedMeta.playerSide === 'random' ? 'bottom' : savedMeta.playerSide
-    : savedMeta?.mode === 'local-2p'
-      ? 'bottom'
-      : null
+  const playerSide: Side | null =
+    savedMeta?.mode === 'vs-bot'
+      ? savedMeta.playerSide === 'random'
+        ? 'bottom'
+        : savedMeta.playerSide
+      : savedMeta?.mode === 'local-2p'
+        ? 'bottom'
+        : null
 
   const movePositions = positions.filter((p) => p.move)
   const dataPoints = movePositions.map((pos) => {
@@ -145,10 +144,8 @@ function EvalGraph({
   const maxEval = Math.max(1, ...valid.map((d) => Math.abs(d.eval)))
   const yRange = maxEval * 1.2
 
-  const toX = (x: number) =>
-    padding.left + (x / Math.max(1, valid.length - 1)) * innerW
-  const toY = (e: number) =>
-    padding.top + innerH / 2 - (e / yRange) * (innerH / 2)
+  const toX = (x: number) => padding.left + (x / Math.max(1, valid.length - 1)) * innerW
+  const toY = (e: number) => padding.top + innerH / 2 - (e / yRange) * (innerH / 2)
 
   const linePath = valid
     .map((d, i) => `${i === 0 ? 'M' : 'L'} ${toX(d.x)} ${toY(d.eval)}`)
@@ -162,39 +159,22 @@ function EvalGraph({
   ].join(' ')
 
   const zeroY = toY(0)
-  const topLabel = playerSide
-    ? playerNameShort(playerSide, savedMeta)
-    : strings.game.player1
+  const topLabel = playerSide ? playerNameShort(playerSide, savedMeta) : strings.game.player1
   const bottomLabel = playerSide
     ? playerNameShort(playerSide === 'bottom' ? 'top' : 'bottom', savedMeta)
     : strings.game.player2
 
   return (
     <div className="w-full overflow-x-auto">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="w-full h-48 md:h-52"
-      >
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-48 md:h-52">
         {/* Y-axis labels */}
-        <text
-          x={6}
-          y={padding.top + 10}
-          className="text-[8px] fill-muted"
-        >
+        <text x={6} y={padding.top + 10} className="text-[8px] fill-muted">
           +{maxEval.toFixed(0)}
         </text>
-        <text
-          x={6}
-          y={zeroY + 3}
-          className="text-[8px] fill-muted"
-        >
+        <text x={6} y={zeroY + 3} className="text-[8px] fill-muted">
           0
         </text>
-        <text
-          x={6}
-          y={height - padding.bottom + 6}
-          className="text-[8px] fill-muted"
-        >
+        <text x={6} y={height - padding.bottom + 6} className="text-[8px] fill-muted">
           -{maxEval.toFixed(0)}
         </text>
 
@@ -282,12 +262,7 @@ function EvalGraph({
                     stroke="var(--theme-accent)"
                     strokeWidth={0.5}
                   />
-                  <text
-                    x={cx}
-                    y={cy - 12}
-                    textAnchor="middle"
-                    className="text-[9px] fill-text"
-                  >
+                  <text x={cx} y={cy - 12} textAnchor="middle" className="text-[9px] fill-text">
                     #{d.x + 1}
                   </text>
                 </>
@@ -353,9 +328,7 @@ function MoveListPanel({
               className="w-2.5 h-2.5 rounded-full shrink-0"
               style={{ backgroundColor: color }}
             />
-            <span className="text-muted w-5 text-left text-xs font-mono">
-              {index + 1}
-            </span>
+            <span className="text-muted w-5 text-left text-xs font-mono">{index + 1}</span>
             {isBotMode && (
               <span className="text-muted/60 w-5 text-right text-[10px]">
                 {humanRow ? 'Y' : 'B'}
@@ -363,9 +336,7 @@ function MoveListPanel({
             )}
             <span className="font-mono font-bold">{playedNotation}</span>
             {!isBest && playedNotation !== bestNotation && (
-              <span className="text-muted text-xs ml-1">
-                (&rarr; {bestNotation})
-              </span>
+              <span className="text-muted text-xs ml-1">(&rarr; {bestNotation})</span>
             )}
             {!isBest && (
               <span className="ml-auto text-[11px] font-medium" style={{ color }}>
@@ -411,9 +382,7 @@ function MiniBoardDisplay({
         key={idx}
         className={
           'relative w-8 h-8 rounded-md border flex items-center justify-center text-[10px] font-bold ' +
-          (isAccent
-            ? 'border-accent ring-1 ring-accent bg-pit'
-            : 'border-board/40 bg-pit/60')
+          (isAccent ? 'border-accent ring-1 ring-accent bg-pit' : 'border-board/40 bg-pit/60')
         }
       >
         {board[idx]}
@@ -458,9 +427,7 @@ export function ReviewScreen() {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showPV, setShowPV] = useState(false)
   const [pvStep, setPvStep] = useState(0)
-  const [localCache, setLocalCache] = useState<AnalysisCacheEntry[] | null>(
-    null,
-  )
+  const [localCache, setLocalCache] = useState<AnalysisCacheEntry[] | null>(null)
   const [playing, setPlaying] = useState(false)
   const [shareStatus, setShareStatus] = useState<string | null>(null)
 
@@ -472,9 +439,12 @@ export function ReviewScreen() {
 
   const effectiveSpeed = animationSpeed > 0 ? animationSpeed : 1
 
-  const playerSide: Side | null = savedMeta?.mode === 'vs-bot'
-    ? savedMeta.playerSide === 'random' ? 'bottom' : savedMeta.playerSide
-    : null
+  const playerSide: Side | null =
+    savedMeta?.mode === 'vs-bot'
+      ? savedMeta.playerSide === 'random'
+        ? 'bottom'
+        : savedMeta.playerSide
+      : null
 
   const cache = localCache ?? analysisCache
 
@@ -513,10 +483,7 @@ export function ReviewScreen() {
 
         const playedMove = pos.move
 
-        if (
-          playedMove.pitIndex === result.pitIndex ||
-          result.pitIndex < 0
-        ) {
+        if (playedMove.pitIndex === result.pitIndex || result.pitIndex < 0) {
           entries.push({
             bestPitIndex: result.pitIndex,
             bestEval: result.evalScore,
@@ -527,20 +494,10 @@ export function ReviewScreen() {
         } else {
           let playedEval = result.evalScore
           try {
-            const childState = applyMove(
-              pos.state,
-              playedMove.pitIndex,
-              rules,
-            )
-            const childEval = evaluateExpert(
-              childState,
-              rules,
-            )
-            const childMove =
-              childState.moveHistory[childState.moveHistory.length - 1]
-            playedEval = childMove?.wasExtraTurn
-              ? childEval
-              : -childEval
+            const childState = applyMove(pos.state, playedMove.pitIndex, rules)
+            const childEval = evaluateExpert(childState, rules)
+            const childMove = childState.moveHistory[childState.moveHistory.length - 1]
+            playedEval = childMove?.wasExtraTurn ? childEval : -childEval
           } catch {
             playedEval = result.evalScore
           }
@@ -613,8 +570,7 @@ export function ReviewScreen() {
   const isHumanTurn =
     currentPos &&
     currentPos.move &&
-    (savedMeta?.mode !== 'vs-bot' ||
-      currentPos.player === playerSide)
+    (savedMeta?.mode !== 'vs-bot' || currentPos.player === playerSide)
 
   const playedMoveNotBest =
     currentPos?.move &&
@@ -681,14 +637,11 @@ export function ReviewScreen() {
     }
   }, [pvStates, showPV, currentIndex])
 
-  const handlePVChipClick = useCallback(
-    (step: number) => {
-      if (pvTimerRef.current) clearInterval(pvTimerRef.current)
-      pvTimerRef.current = null
-      setPvStep(step)
-    },
-    [],
-  )
+  const handlePVChipClick = useCallback((step: number) => {
+    if (pvTimerRef.current) clearInterval(pvTimerRef.current)
+    pvTimerRef.current = null
+    setPvStep(step)
+  }, [])
 
   // Playback scrubber
   const togglePlayback = useCallback(() => {
@@ -736,9 +689,7 @@ export function ReviewScreen() {
         setCurrentIndex((prev) => Math.max(0, prev - 1))
         setPlaying(false)
       } else if (e.key === 'ArrowRight') {
-        setCurrentIndex((prev) =>
-          Math.min(positions.length - 1, prev + 1),
-        )
+        setCurrentIndex((prev) => Math.min(positions.length - 1, prev + 1))
         setPlaying(false)
       } else if (e.key === ' ') {
         e.preventDefault()
@@ -753,15 +704,14 @@ export function ReviewScreen() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
 
-  const viewFromBottom = savedMeta?.mode === 'vs-bot'
-    ? playerSide === 'bottom'
-    : boardFlip
-      ? currentPos?.player === 'bottom'
-      : true
+  const viewFromBottom =
+    savedMeta?.mode === 'vs-bot'
+      ? playerSide === 'bottom'
+      : boardFlip
+        ? currentPos?.player === 'bottom'
+        : true
 
-  const displayState = showPV && pvStates[pvStep]
-    ? pvStates[pvStep]
-    : currentPos?.state ?? null
+  const displayState = showPV && pvStates[pvStep] ? pvStates[pvStep] : (currentPos?.state ?? null)
 
   const accentPitForDisplay =
     showPV && pvMoves[pvStep] != null
@@ -770,10 +720,8 @@ export function ReviewScreen() {
         ? currentEntry.bestPitIndex
         : null
 
-  // Handle shared game (read-only) and fromHistory
+  // Handle shared game
   const isShared = locationState?.shared === true
-  const isFromHistory = locationState?.fromHistory !== undefined
-  const readOnly = isShared || isFromHistory
 
   const handlePlayFromHere = useCallback(() => {
     if (!currentPos) return
@@ -817,17 +765,7 @@ export function ReviewScreen() {
       )}
 
       <div className="flex items-center justify-between w-full">
-        <button
-          type="button"
-          onClick={() => {
-            if (isShared) navigate('/home')
-            else navigate('/game')
-          }}
-          className="text-accent hover:underline text-sm"
-        >
-          &larr; {readOnly ? strings.game.home : strings.review.backToGame}
-        </button>
-        <h1 className="text-lg font-bold text-text">
+        <h1 className="text-display-md font-display font-semibold text-text">
           {isShared ? strings.shared.readOnlyReview : strings.review.title}
         </h1>
         <div className="flex gap-2">
@@ -905,9 +843,7 @@ export function ReviewScreen() {
                 <button
                   type="button"
                   onClick={() => {
-                    setCurrentIndex((prev) =>
-                      Math.min(maxIndex, prev + 1),
-                    )
+                    setCurrentIndex((prev) => Math.min(maxIndex, prev + 1))
                     setPlaying(false)
                   }}
                   disabled={currentIndex >= maxIndex}
@@ -943,9 +879,7 @@ export function ReviewScreen() {
               </div>
 
               <div className="text-xs text-muted text-center">
-                {currentPos?.move
-                  ? `${playerLabel(currentPos, savedMeta)}`
-                  : 'Start'}
+                {currentPos?.move ? `${playerLabel(currentPos, savedMeta)}` : 'Start'}
                 {currentPos?.move && (
                   <span className="ml-1 text-text font-mono">
                     {notatePit(currentPos.move!.pitIndex)}
@@ -997,20 +931,20 @@ export function ReviewScreen() {
                         <span className="text-[10px] opacity-70">
                           {playerNameShort(m.player, savedMeta)}
                         </span>
-                        <span className="font-mono font-bold">
-                          {notatePit(m.pit)}
-                        </span>
+                        <span className="font-mono font-bold">{notatePit(m.pit)}</span>
                       </button>
                     ))}
                   </div>
                   {pvStep < pvStates.length - 1 && (
                     <p className="text-[10px] text-muted/50 mt-1">
-                      Animating &middot; click any chip to scrub &middot; press &ldquo;See&hellip;&rdquo; again to restart
+                      Animating &middot; click any chip to scrub &middot; press
+                      &ldquo;See&hellip;&rdquo; again to restart
                     </p>
                   )}
                   {pvStep >= pvStates.length - 1 && (
                     <p className="text-[10px] text-muted/50 mt-1">
-                      Variation complete &middot; click any chip to review &middot; press &ldquo;See&hellip;&rdquo; to restart
+                      Variation complete &middot; click any chip to review &middot; press
+                      &ldquo;See&hellip;&rdquo; to restart
                     </p>
                   )}
                 </motion.div>
@@ -1033,7 +967,8 @@ export function ReviewScreen() {
           </div>
 
           <p className="text-[10px] text-muted/50 mt-2">
-            &larr; &rarr; keys to scrub &middot; Space to play/pause &middot; Click a move to jump &middot; Click graph point to navigate
+            &larr; &rarr; keys to scrub &middot; Space to play/pause &middot; Click a move to jump
+            &middot; Click graph point to navigate
           </p>
         </>
       )}

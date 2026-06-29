@@ -9,12 +9,9 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export function InstallPrompt({ visible }: { visible: boolean }) {
-  const [deferredPrompt, setDeferredPrompt] =
-    useState<BeforeInstallPromptEvent | null>(null)
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [promptActive, setPromptActive] = useState(false)
-  const dismissedRef = useRef(
-    () => localStorage.getItem(DISMISSED_KEY) === 'true',
-  )
+  const dismissedRef = useRef(() => localStorage.getItem(DISMISSED_KEY) === 'true')
 
   useEffect(() => {
     const handler = (e: Event) => {

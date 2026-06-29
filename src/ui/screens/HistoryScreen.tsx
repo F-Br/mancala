@@ -47,14 +47,9 @@ export function HistoryScreen() {
   return (
     <main className="min-h-screen p-4 flex flex-col items-center gap-4 max-w-lg mx-auto">
       <div className="flex items-center justify-between w-full">
-        <button
-          type="button"
-          onClick={() => navigate('/home')}
-          className="text-accent hover:underline text-sm"
-        >
-          &larr; {strings.game.home}
-        </button>
-        <h1 className="text-lg font-bold text-text">{strings.history.title}</h1>
+        <h1 className="text-display-md font-display font-semibold text-text">
+          {strings.history.title}
+        </h1>
         {sorted.length > 0 && (
           <button
             type="button"
@@ -69,9 +64,7 @@ export function HistoryScreen() {
       {showClearConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-board rounded-2xl p-6 mx-4 max-w-sm w-full flex flex-col items-center gap-4 shadow-2xl">
-            <p className="text-sm text-text text-center">
-              {strings.history.clearConfirm}
-            </p>
+            <p className="text-sm text-text text-center">{strings.history.clearConfirm}</p>
             <div className="flex gap-3 w-full">
               <button
                 type="button"
@@ -98,13 +91,6 @@ export function HistoryScreen() {
       {sorted.length === 0 ? (
         <div className="flex flex-col items-center gap-3 mt-12 text-center">
           <p className="text-muted text-sm">{strings.history.empty}</p>
-          <button
-            type="button"
-            onClick={() => navigate('/home')}
-            className="text-accent hover:underline text-sm"
-          >
-            &larr; {strings.game.home}
-          </button>
         </div>
       ) : (
         <div className="flex flex-col gap-1 w-full">
@@ -135,11 +121,7 @@ export function HistoryScreen() {
                   <span className="text-sm text-text truncate shrink min-w-0">
                     {record.opponentLabel}
                   </span>
-                  <span
-                    className={
-                      'text-xs font-bold px-1.5 py-0.5 rounded ' + resultColor
-                    }
-                  >
+                  <span className={'text-xs font-bold px-1.5 py-0.5 rounded ' + resultColor}>
                     {record.result === 'win'
                       ? strings.history.win
                       : record.result === 'loss'

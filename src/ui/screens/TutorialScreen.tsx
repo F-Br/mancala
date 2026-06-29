@@ -12,18 +12,14 @@ interface BoardDiagramProps {
   arrows?: { from: number; to: number }[]
 }
 
-function BoardDiagram({
-  pits,
-  stores,
-  highlightPits = [],
-  highlightStore,
-}: BoardDiagramProps) {
+function BoardDiagram({ pits, stores, highlightPits = [], highlightStore }: BoardDiagramProps) {
   const topPits = pits.slice(0, 6)
   const botPits = pits.slice(6, 12)
 
   const pClass = (idx: number, isStore: boolean) => {
     const hl = isStore
-      ? highlightStore && ((highlightStore === 'bottom' && idx === 0) || (highlightStore === 'top' && idx === 1))
+      ? highlightStore &&
+        ((highlightStore === 'bottom' && idx === 0) || (highlightStore === 'top' && idx === 1))
       : highlightPits.includes(idx)
     return (
       'flex items-center justify-center border rounded text-xs font-mono w-7 h-7 md:w-8 md:h-8 ' +
@@ -34,9 +30,7 @@ function BoardDiagram({
   return (
     <div className="flex flex-col items-center gap-1 scale-75 md:scale-100 origin-top">
       <div className="flex items-center gap-1">
-        <div className={pClass(0, true) + ' w-7 h-14 md:w-8 md:h-16'}>
-          {stores[0]}
-        </div>
+        <div className={pClass(0, true) + ' w-7 h-14 md:w-8 md:h-16'}>{stores[0]}</div>
         <div className="flex flex-col gap-0.5">
           <div className="flex gap-0.5">
             {topPits.map((v, i) => (
@@ -53,21 +47,14 @@ function BoardDiagram({
             ))}
           </div>
         </div>
-        <div className={pClass(1, true) + ' w-7 h-14 md:w-8 md:h-16'}>
-          {stores[1]}
-        </div>
+        <div className={pClass(1, true) + ' w-7 h-14 md:w-8 md:h-16'}>{stores[1]}</div>
       </div>
     </div>
   )
 }
 
 const panelDiagrams: ((active: boolean) => React.ReactNode)[] = [
-  () => (
-    <BoardDiagram
-      pits={[4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]}
-      stores={[0, 0]}
-    />
-  ),
+  () => <BoardDiagram pits={[4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]} stores={[0, 0]} />,
   () => {
     const pits = [0, 5, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]
     return (
@@ -85,31 +72,13 @@ const panelDiagrams: ((active: boolean) => React.ReactNode)[] = [
   },
   () => {
     const pits = [0, 0, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4]
-    return (
-      <BoardDiagram
-        pits={pits}
-        stores={[1, 0]}
-        highlightPits={[6]}
-        highlightStore="bottom"
-      />
-    )
+    return <BoardDiagram pits={pits} stores={[1, 0]} highlightPits={[6]} highlightStore="bottom" />
   },
   () => {
     const pits = [0, 0, 0, 1, 4, 5, 4, 3, 4, 4, 4, 4]
-    return (
-      <BoardDiagram
-        pits={pits}
-        stores={[4, 0]}
-        highlightPits={[3, 8]}
-      />
-    )
+    return <BoardDiagram pits={pits} stores={[4, 0]} highlightPits={[3, 8]} />
   },
-  () => (
-    <BoardDiagram
-      pits={[0, 0, 0, 0, 0, 0, 3, 2, 1, 4, 0, 0]}
-      stores={[18, 6]}
-    />
-  ),
+  () => <BoardDiagram pits={[0, 0, 0, 0, 0, 0, 3, 2, 1, 4, 0, 0]} stores={[18, 6]} />,
   () => (
     <BoardDiagram
       pits={[0, 6, 0, 3, 1, 4, 0, 2, 4, 4, 0, 0]}
@@ -152,13 +121,9 @@ export function TutorialScreen() {
               {panelDiagrams[panel]?.(true)}
             </div>
 
-            <h2 className="text-lg font-bold text-text text-center">
-              {panels[panel]!.title}
-            </h2>
+            <h2 className="text-lg font-bold text-text text-center">{panels[panel]!.title}</h2>
 
-            <p className="text-sm text-muted text-center leading-relaxed">
-              {panels[panel]!.text}
-            </p>
+            <p className="text-sm text-muted text-center leading-relaxed">{panels[panel]!.text}</p>
           </div>
 
           <div className="flex items-center justify-center gap-2">

@@ -66,8 +66,7 @@ export const useGameStore = create<GameStore>()(
       },
       clear: () => set({ gameState: null, savedMeta: null, analysisCache: null }),
       setSavedMeta: (meta: SavedMeta) => set({ savedMeta: meta }),
-      setAnalysisCache: (cache: AnalysisCacheEntry[] | null) =>
-        set({ analysisCache: cache }),
+      setAnalysisCache: (cache: AnalysisCacheEntry[] | null) => set({ analysisCache: cache }),
     }),
     {
       name: 'mancala-current-game',

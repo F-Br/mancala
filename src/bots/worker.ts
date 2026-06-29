@@ -1,11 +1,6 @@
 import type { GameState, RuleConfig } from '../engine'
 import { KALAH_STANDARD, legalMoves } from '../engine'
-import {
-  pickMoveBeginner,
-  pickMoveCasual,
-  minimaxWithAB,
-  minimaxWithABTT,
-} from './search'
+import { pickMoveBeginner, pickMoveCasual, minimaxWithAB, minimaxWithABTT } from './search'
 import type { CancelSignal } from './search'
 import { TranspositionTable } from './search'
 import { evaluateStrong, evaluateExpert } from './evaluation'
@@ -15,9 +10,7 @@ export class WorkerMessageHandler {
   private currentCancel: CancelSignal | null = null
   private readonly postMsg: (msg: BotWorkerMessage) => void
 
-  constructor(
-    postMsg: (msg: BotWorkerMessage) => void,
-  ) {
+  constructor(postMsg: (msg: BotWorkerMessage) => void) {
     this.postMsg = postMsg
   }
 
@@ -78,14 +71,7 @@ export class WorkerMessageHandler {
         return
       }
 
-      this.runAsyncSearch(
-        state,
-        level,
-        timeBudgetMs,
-        rules,
-        requestId,
-        cancelSignal,
-      )
+      this.runAsyncSearch(state, level, timeBudgetMs, rules, requestId, cancelSignal)
     } catch (err) {
       this.postMsg({
         type: 'error',
@@ -106,10 +92,8 @@ export class WorkerMessageHandler {
   ): void {
     const startTime = performance.now()
     const budget = timeBudgetMs ?? (level === 'strong' ? 1500 : 3000)
-    const evalFn =
-      level === 'strong' ? evaluateStrong : evaluateExpert
-    const tt: TranspositionTable | null =
-      level === 'expert' ? new TranspositionTable() : null
+    const evalFn = level === 'strong' ? evaluateStrong : evaluateExpert
+    const tt: TranspositionTable | null = level === 'expert' ? new TranspositionTable() : null
 
     let bestResult = { score: 0, pv: [] as number[], depth: 0 }
     let depth = 1
@@ -161,15 +145,7 @@ export class WorkerMessageHandler {
           cancelSignal,
         )
       } else {
-        result = minimaxWithAB(
-          state,
-          depth,
-          -Infinity,
-          +Infinity,
-          rules,
-          evalFn,
-          cancelSignal,
-        )
+        result = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal)
       }
 
       if (cancelSignal.cancelled) {

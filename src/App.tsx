@@ -1,7 +1,16 @@
 import { useEffect, useRef } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useSearchParams,
+} from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ThemeProvider } from './ui/theme'
+import { Nav, useIsGameplayRoute } from './ui/components/Nav'
 import { HomeScreen } from './ui/screens/HomeScreen'
 import { BotSelectScreen } from './ui/screens/BotSelectScreen'
 import { GameScreen } from './ui/screens/GameScreen'
@@ -97,14 +106,70 @@ function AppRoutes() {
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        <Route path="/home" element={<AnimatedPage><HomeScreen /></AnimatedPage>} />
-        <Route path="/bot-select" element={<AnimatedPage><BotSelectScreen /></AnimatedPage>} />
-        <Route path="/game" element={<AnimatedPage><GameScreen /></AnimatedPage>} />
-        <Route path="/settings" element={<AnimatedPage><SettingsScreen /></AnimatedPage>} />
-        <Route path="/analysis" element={<AnimatedPage><ReviewScreen /></AnimatedPage>} />
-        <Route path="/game-history" element={<AnimatedPage><HistoryScreen /></AnimatedPage>} />
-        <Route path="/stats" element={<AnimatedPage><StatsScreen /></AnimatedPage>} />
-        <Route path="/tutorial" element={<AnimatedPage><TutorialScreen /></AnimatedPage>} />
+        <Route
+          path="/home"
+          element={
+            <AnimatedPage>
+              <HomeScreen />
+            </AnimatedPage>
+          }
+        />
+        <Route
+          path="/bot-select"
+          element={
+            <AnimatedPage>
+              <BotSelectScreen />
+            </AnimatedPage>
+          }
+        />
+        <Route
+          path="/game"
+          element={
+            <AnimatedPage>
+              <GameScreen />
+            </AnimatedPage>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <AnimatedPage>
+              <SettingsScreen />
+            </AnimatedPage>
+          }
+        />
+        <Route
+          path="/analysis"
+          element={
+            <AnimatedPage>
+              <ReviewScreen />
+            </AnimatedPage>
+          }
+        />
+        <Route
+          path="/game-history"
+          element={
+            <AnimatedPage>
+              <HistoryScreen />
+            </AnimatedPage>
+          }
+        />
+        <Route
+          path="/stats"
+          element={
+            <AnimatedPage>
+              <StatsScreen />
+            </AnimatedPage>
+          }
+        />
+        <Route
+          path="/tutorial"
+          element={
+            <AnimatedPage>
+              <TutorialScreen />
+            </AnimatedPage>
+          }
+        />
         <Route
           path="/placeholder"
           element={
@@ -119,13 +184,26 @@ function AppRoutes() {
   )
 }
 
+function AppShell() {
+  const isGameplay = useIsGameplayRoute()
+
+  return (
+    <>
+      <Nav />
+      <div className={isGameplay ? '' : 'pb-16 md:pb-0'}>
+        <AppRoutes />
+      </div>
+    </>
+  )
+}
+
 function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
         <SharedGameHandler>
           <TutorialGuard>
-            <AppRoutes />
+            <AppShell />
           </TutorialGuard>
         </SharedGameHandler>
       </ThemeProvider>

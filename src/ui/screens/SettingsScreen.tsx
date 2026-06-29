@@ -23,19 +23,9 @@ export function SettingsScreen() {
 
   return (
     <main className="min-h-screen p-4 flex flex-col items-center gap-6 max-w-md mx-auto">
-      <div className="flex items-center justify-between w-full">
-        <button
-          type="button"
-          onClick={() => navigate('/home')}
-          className="text-accent hover:underline text-sm"
-        >
-          &larr; {strings.game.home}
-        </button>
-        <h1 className="text-xl font-bold text-text">
-          {strings.settings.title}
-        </h1>
-        <div className="w-12" />
-      </div>
+      <h1 className="text-display-lg font-display font-semibold text-text">
+        {strings.settings.title}
+      </h1>
 
       <div className="flex flex-col gap-6 w-full">
         <Section label={strings.settings.theme}>
@@ -84,9 +74,7 @@ export function SettingsScreen() {
             max={2}
             step={0.5}
             value={settings.animationSpeed}
-            onChange={(e) =>
-              settings.setAnimationSpeed(Number(e.target.value))
-            }
+            onChange={(e) => settings.setAnimationSpeed(Number(e.target.value))}
             className="w-full accent-accent"
           />
           <div className="flex justify-between text-xs text-muted">
@@ -150,13 +138,7 @@ export function SettingsScreen() {
   )
 }
 
-function Section({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
       <label className="text-sm text-muted font-medium">{label}</label>
@@ -180,9 +162,7 @@ function ToggleRow({
     <div className="flex items-center justify-between">
       <div className="flex flex-col">
         <span className="text-sm text-text font-medium">{label}</span>
-        {description && (
-          <span className="text-xs text-muted">{description}</span>
-        )}
+        {description && <span className="text-xs text-muted">{description}</span>}
       </div>
       <button
         type="button"

@@ -29,9 +29,7 @@ function getWorker(): Worker {
 
   worker = new BotWorker()
 
-  worker.onmessage = (
-    event: MessageEvent<BotWorkerMessage>,
-  ) => {
+  worker.onmessage = (event: MessageEvent<BotWorkerMessage>) => {
     const msg = event.data
 
     if (msg.type === 'move') {

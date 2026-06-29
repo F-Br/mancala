@@ -15,7 +15,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/space-grotesk": "^5.2.10",
     "framer-motion": "^12.42.0",
+    "lucide-react": "^1.22.0",
     "lz-string": "^1.5.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

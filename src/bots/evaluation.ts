@@ -16,11 +16,7 @@ function storeDifference(state: GameState): number {
   return (state.board[ownStore] ?? 0) - (state.board[oppStore] ?? 0)
 }
 
-function countLegalMoves(
-  board: number[],
-  player: Side,
-  pitsPerSide: number,
-): number {
+function countLegalMoves(board: number[], player: Side, pitsPerSide: number): number {
   const start = player === 'bottom' ? 0 : pitsPerSide + 1
   const end = player === 'bottom' ? pitsPerSide - 1 : pitsPerSide * 2
   let count = 0
@@ -31,24 +27,15 @@ function countLegalMoves(
 }
 
 function mobilityScore(state: GameState, rules: RuleConfig): number {
-  const opponent: Side =
-    state.currentPlayer === 'bottom' ? 'top' : 'bottom'
-  const myMoves = countLegalMoves(
-    state.board,
-    state.currentPlayer,
-    rules.pitsPerSide,
-  )
+  const opponent: Side = state.currentPlayer === 'bottom' ? 'top' : 'bottom'
+  const myMoves = countLegalMoves(state.board, state.currentPlayer, rules.pitsPerSide)
   const oppMoves = countLegalMoves(state.board, opponent, rules.pitsPerSide)
   return myMoves - oppMoves
 }
 
 function stonesInOwnPits(state: GameState, rules: RuleConfig): number {
-  const start =
-    state.currentPlayer === 'bottom' ? 0 : rules.pitsPerSide + 1
-  const end =
-    state.currentPlayer === 'bottom'
-      ? rules.pitsPerSide - 1
-      : rules.pitsPerSide * 2
+  const start = state.currentPlayer === 'bottom' ? 0 : rules.pitsPerSide + 1
+  const end = state.currentPlayer === 'bottom' ? rules.pitsPerSide - 1 : rules.pitsPerSide * 2
   let sum = 0
   for (let i = start; i <= end; i++) {
     sum += state.board[i] ?? 0
@@ -67,18 +54,13 @@ function hasCaptureMove(state: GameState, rules: RuleConfig): boolean {
 }
 
 function emptyPitSetupScore(state: GameState, rules: RuleConfig): number {
-  const ownStart =
-    state.currentPlayer === 'bottom' ? 0 : rules.pitsPerSide + 1
-  const ownEnd =
-    state.currentPlayer === 'bottom'
-      ? rules.pitsPerSide - 1
-      : rules.pitsPerSide * 2
+  const ownStart = state.currentPlayer === 'bottom' ? 0 : rules.pitsPerSide + 1
+  const ownEnd = state.currentPlayer === 'bottom' ? rules.pitsPerSide - 1 : rules.pitsPerSide * 2
 
   let score = 0
   for (let i = ownStart; i <= ownEnd; i++) {
     if ((state.board[i] ?? 0) === 0) {
-      const oppIdx =
-        rules.pitsPerSide * 2 - i
+      const oppIdx = rules.pitsPerSide * 2 - i
       const oppStones = state.board[oppIdx] ?? 0
       if (oppStones > 0) {
         // Potential capture: last stone needs to land in this empty pit
@@ -92,19 +74,13 @@ function emptyPitSetupScore(state: GameState, rules: RuleConfig): number {
 
 export type EvaluationFn = (state: GameState, rules: RuleConfig) => number
 
-export function evaluateSimple(
-  state: GameState,
-  _rules: RuleConfig,
-): number {
+export function evaluateSimple(state: GameState, _rules: RuleConfig): number {
   const term = terminalScore(state)
   if (term !== null) return term
   return storeDifference(state)
 }
 
-export function evaluateStrong(
-  state: GameState,
-  rules: RuleConfig,
-): number {
+export function evaluateStrong(state: GameState, rules: RuleConfig): number {
   const term = terminalScore(state)
   if (term !== null) return term
   let score = storeDifference(state)
@@ -114,10 +90,7 @@ export function evaluateStrong(
   return score
 }
 
-export function evaluateExpert(
-  state: GameState,
-  rules: RuleConfig,
-): number {
+export function evaluateExpert(state: GameState, rules: RuleConfig): number {
   const term = terminalScore(state)
   if (term !== null) return term
   let score = storeDifference(state)

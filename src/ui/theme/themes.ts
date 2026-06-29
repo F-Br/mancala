@@ -1,10 +1,4 @@
-export type ClassificationKey =
-  | 'best'
-  | 'excellent'
-  | 'good'
-  | 'inaccuracy'
-  | 'mistake'
-  | 'blunder'
+export type ClassificationKey = 'best' | 'excellent' | 'good' | 'inaccuracy' | 'mistake' | 'blunder'
 
 export interface ClassificationColors {
   best: string
@@ -65,6 +59,12 @@ export interface ThemeColors {
   text: string
   muted: string
   classifications: ClassificationColors
+  surface: string
+  surface2: string
+  border: string
+  highlight: string
+  shadowContact: string
+  shadowCard: string
 }
 
 export type ThemeKey = 'warm-earth' | 'dark-museum' | 'modern-desert'
@@ -81,6 +81,12 @@ export const themes: Themes = {
     text: '#F0DEC4',
     muted: '#8C7A66',
     classifications: classificationColors,
+    surface: '#2C1610',
+    surface2: '#3A1F14',
+    border: 'rgba(255,255,255,0.08)',
+    highlight: 'rgba(255,255,255,0.07)',
+    shadowContact: '0 1px 2px rgba(0,0,0,0.35)',
+    shadowCard: '0 1px 2px rgba(0,0,0,0.30), 0 10px 30px -8px rgba(0,0,0,0.45)',
   },
   'dark-museum': {
     bg: '#161617',
@@ -91,6 +97,12 @@ export const themes: Themes = {
     text: '#F2EAD8',
     muted: '#838385',
     classifications: classificationColors,
+    surface: '#1E1E20',
+    surface2: '#29292C',
+    border: 'rgba(255,255,255,0.08)',
+    highlight: 'rgba(255,255,255,0.06)',
+    shadowContact: '0 1px 2px rgba(0,0,0,0.35)',
+    shadowCard: '0 1px 2px rgba(0,0,0,0.30), 0 10px 30px -8px rgba(0,0,0,0.45)',
   },
   'modern-desert': {
     bg: '#F3ECDF',
@@ -101,6 +113,12 @@ export const themes: Themes = {
     text: '#2A1F18',
     muted: '#7A5F4A',
     classifications: classificationColors,
+    surface: '#FDF9F0',
+    surface2: '#F5EDDC',
+    border: 'rgba(0,0,0,0.10)',
+    highlight: 'rgba(255,255,255,0.60)',
+    shadowContact: '0 1px 2px rgba(0,0,0,0.10)',
+    shadowCard: '0 1px 2px rgba(0,0,0,0.06), 0 10px 30px -10px rgba(0,0,0,0.15)',
   },
 }
 

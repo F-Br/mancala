@@ -24,13 +24,7 @@ export function decodeState(encoded: string): GameState {
   const status: GameState['status'] = parts[2] === 'i' ? 'in-progress' : 'finished'
   const winnerRaw = parts[3]!
   const winner: GameState['winner'] =
-    winnerRaw === 'n'
-      ? null
-      : winnerRaw === 'b'
-        ? 'bottom'
-        : winnerRaw === 't'
-          ? 'top'
-          : 'draw'
+    winnerRaw === 'n' ? null : winnerRaw === 'b' ? 'bottom' : winnerRaw === 't' ? 'top' : 'draw'
 
   return {
     board,

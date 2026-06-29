@@ -108,8 +108,7 @@ function orderMoves(
     if (pit === ttBestMove) score += 10000
 
     const ownStore = state.currentPlayer === 'bottom' ? BOTTOM_STORE : TOP_STORE
-    const distToStore =
-      (ownStore - pit + BOARD_LENGTH) % BOARD_LENGTH || BOARD_LENGTH
+    const distToStore = (ownStore - pit + BOARD_LENGTH) % BOARD_LENGTH || BOARD_LENGTH
     if (score === distToStore) score += 50
 
     const child = applyMove(state, pit, rules)
@@ -195,15 +194,7 @@ function minimaxWithAB(
     if (cancelSignal?.cancelled) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
-    const result = minimaxWithAB(
-      child,
-      depth - 1,
-      -beta,
-      -alpha,
-      rules,
-      evalFn,
-      cancelSignal,
-    )
+    const result = minimaxWithAB(child, depth - 1, -beta, -alpha, rules, evalFn, cancelSignal)
     const score = childMove?.wasExtraTurn ? result.score : -result.score
 
     if (score > bestScore) {
@@ -274,16 +265,7 @@ function minimaxWithABTT(
     if (cancelSignal?.cancelled) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
-    const result = minimaxWithABTT(
-      child,
-      depth - 1,
-      -beta,
-      -alpha,
-      rules,
-      evalFn,
-      tt,
-      cancelSignal,
-    )
+    const result = minimaxWithABTT(child, depth - 1, -beta, -alpha, rules, evalFn, tt, cancelSignal)
     const score = childMove?.wasExtraTurn ? result.score : -result.score
 
     if (score > bestScore) {
@@ -331,26 +313,9 @@ export function iterativeDeepening(
 
     let result: SearchResult
     if (tt) {
-      result = minimaxWithABTT(
-        state,
-        depth,
-        -Infinity,
-        +Infinity,
-        rules,
-        evalFn,
-        tt,
-        cancelSignal,
-      )
+      result = minimaxWithABTT(state, depth, -Infinity, +Infinity, rules, evalFn, tt, cancelSignal)
     } else {
-      result = minimaxWithAB(
-        state,
-        depth,
-        -Infinity,
-        +Infinity,
-        rules,
-        evalFn,
-        cancelSignal,
-      )
+      result = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal)
     }
 
     if (cancelSignal?.cancelled) break
@@ -405,14 +370,7 @@ export function pickMoveStrong(
   timeBudgetMs = 1500,
   cancelSignal?: CancelSignal,
 ): IterativeResult {
-  return iterativeDeepening(
-    state,
-    timeBudgetMs,
-    rules,
-    evaluateStrong,
-    null,
-    cancelSignal,
-  )
+  return iterativeDeepening(state, timeBudgetMs, rules, evaluateStrong, null, cancelSignal)
 }
 
 export function pickMoveExpert(
@@ -422,14 +380,7 @@ export function pickMoveExpert(
   cancelSignal?: CancelSignal,
 ): IterativeResult {
   const tt = new TranspositionTable()
-  return iterativeDeepening(
-    state,
-    timeBudgetMs,
-    rules,
-    evaluateExpert,
-    tt,
-    cancelSignal,
-  )
+  return iterativeDeepening(state, timeBudgetMs, rules, evaluateExpert, tt, cancelSignal)
 }
 
 export { minimax, minimaxWithAB, minimaxWithABTT }

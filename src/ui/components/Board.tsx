@@ -25,10 +25,7 @@ function seededRandom(seed: number): number {
   return x - Math.floor(x)
 }
 
-function getJitteredPositions(
-  count: number,
-  pitIndex: number,
-): { x: number; y: number }[] {
+function getJitteredPositions(count: number, pitIndex: number): { x: number; y: number }[] {
   if (count === 0) return []
   if (count === 1) return [{ x: 0.5, y: 0.5 }]
   if (count === 2) {
@@ -65,14 +62,66 @@ function getSymmetricPositions(count: number): { x: number; y: number }[] {
 
   const ringLayouts: Record<number, [number, number][]> = {
     1: [[0.5, 0.5]],
-    2: [[0.3, 0.5], [0.7, 0.5]],
-    3: [[0.5, 0.25], [0.25, 0.65], [0.75, 0.65]],
-    4: [[0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]],
-    5: [[0.5, 0.5], [0.35, 0.2], [0.65, 0.2], [0.35, 0.8], [0.65, 0.8]],
-    6: [[0.25, 0.3], [0.75, 0.3], [0.25, 0.7], [0.75, 0.7], [0.5, 0.15], [0.5, 0.85]],
-    7: [[0.5, 0.5], [0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75], [0.5, 0.1], [0.5, 0.9]],
-    8: [[0.2, 0.2], [0.5, 0.2], [0.8, 0.2], [0.2, 0.5], [0.8, 0.5], [0.2, 0.8], [0.5, 0.8], [0.8, 0.8]],
-    9: [[0.5, 0.5], [0.2, 0.2], [0.5, 0.2], [0.8, 0.2], [0.2, 0.5], [0.8, 0.5], [0.2, 0.8], [0.5, 0.8], [0.8, 0.8]],
+    2: [
+      [0.3, 0.5],
+      [0.7, 0.5],
+    ],
+    3: [
+      [0.5, 0.25],
+      [0.25, 0.65],
+      [0.75, 0.65],
+    ],
+    4: [
+      [0.3, 0.3],
+      [0.7, 0.3],
+      [0.3, 0.7],
+      [0.7, 0.7],
+    ],
+    5: [
+      [0.5, 0.5],
+      [0.35, 0.2],
+      [0.65, 0.2],
+      [0.35, 0.8],
+      [0.65, 0.8],
+    ],
+    6: [
+      [0.25, 0.3],
+      [0.75, 0.3],
+      [0.25, 0.7],
+      [0.75, 0.7],
+      [0.5, 0.15],
+      [0.5, 0.85],
+    ],
+    7: [
+      [0.5, 0.5],
+      [0.25, 0.25],
+      [0.75, 0.25],
+      [0.25, 0.75],
+      [0.75, 0.75],
+      [0.5, 0.1],
+      [0.5, 0.9],
+    ],
+    8: [
+      [0.2, 0.2],
+      [0.5, 0.2],
+      [0.8, 0.2],
+      [0.2, 0.5],
+      [0.8, 0.5],
+      [0.2, 0.8],
+      [0.5, 0.8],
+      [0.8, 0.8],
+    ],
+    9: [
+      [0.5, 0.5],
+      [0.2, 0.2],
+      [0.5, 0.2],
+      [0.8, 0.2],
+      [0.2, 0.5],
+      [0.8, 0.5],
+      [0.2, 0.8],
+      [0.5, 0.8],
+      [0.8, 0.8],
+    ],
   }
 
   const predefined = ringLayouts[count]
@@ -142,8 +191,7 @@ function StoneCircles({
           <span
             key={i}
             className={
-              'absolute w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ' +
-              (className ?? 'bg-stone')
+              'absolute w-1.5 h-1.5 md:w-2 md:h-2 rounded-full ' + (className ?? 'bg-stone')
             }
             style={{
               left: `${x * 100}%`,
@@ -180,9 +228,9 @@ function BoardInner({
 }: BoardProps) {
   const boardRef = useRef<HTMLDivElement>(null)
 
-  const [animPhase, setAnimPhase] = useState<
-    'idle' | 'sowing' | 'capture' | 'extraturn' | 'done'
-  >('idle')
+  const [animPhase, setAnimPhase] = useState<'idle' | 'sowing' | 'capture' | 'extraturn' | 'done'>(
+    'idle',
+  )
   const [stonesLanded, setStonesLanded] = useState(0)
   const [capturePhase, setCapturePhase] = useState(0)
   const [showExtraToast, setShowExtraToast] = useState(false)
@@ -198,11 +246,7 @@ function BoardInner({
   const leftStore = viewFromBottom ? 13 : 6
   const rightStore = viewFromBottom ? 6 : 13
 
-  const ownStore = pendingMove
-    ? pendingMove.player === 'bottom'
-      ? 6
-      : 13
-    : 6
+  const ownStore = pendingMove ? (pendingMove.player === 'bottom' ? 6 : 13) : 6
 
   const displayBoard = useMemo(() => {
     if (!prevBoard || !pendingMove || animPhase === 'idle' || animPhase === 'done')
@@ -222,29 +266,22 @@ function BoardInner({
   }, [prevBoard, pendingMove, animPhase, stonesLanded, capturePhase, gameState.board])
 
   const flyingStoneTarget =
-    animPhase === 'sowing' &&
-    pendingMove &&
-    stonesLanded < pendingMove.sowedTo.length
+    animPhase === 'sowing' && pendingMove && stonesLanded < pendingMove.sowedTo.length
       ? pendingMove.sowedTo[stonesLanded]!
       : null
 
-  const getCenter = useCallback(
-    (pitIndex: number): { x: number; y: number } | null => {
-      const boardEl = boardRef.current
-      if (!boardEl) return null
-      const el = boardEl.querySelector(
-        `[data-el="${pitIndex}"]`,
-      ) as HTMLElement | null
-      if (!el) return null
-      const br = boardEl.getBoundingClientRect()
-      const pr = el.getBoundingClientRect()
-      return {
-        x: pr.left - br.left + pr.width / 2,
-        y: pr.top - br.top + pr.height / 2,
-      }
-    },
-    [],
-  )
+  const getCenter = useCallback((pitIndex: number): { x: number; y: number } | null => {
+    const boardEl = boardRef.current
+    if (!boardEl) return null
+    const el = boardEl.querySelector(`[data-el="${pitIndex}"]`) as HTMLElement | null
+    if (!el) return null
+    const br = boardEl.getBoundingClientRect()
+    const pr = el.getBoundingClientRect()
+    return {
+      x: pr.left - br.left + pr.width / 2,
+      y: pr.top - br.top + pr.height / 2,
+    }
+  }, [])
 
   const sourceCenter = useMemo(() => {
     if (!pendingMove) return null
@@ -260,10 +297,7 @@ function BoardInner({
     animPhase === 'capture' && capturePhase >= 1 && pendingMove?.captured
       ? getCenter(pendingMove.captured.fromPit)
       : null
-  const captureToCenter =
-    animPhase === 'capture' && capturePhase >= 1
-      ? getCenter(ownStore)
-      : null
+  const captureToCenter = animPhase === 'capture' && capturePhase >= 1 ? getCenter(ownStore) : null
 
   const animating = animPhase !== 'idle' && animPhase !== 'done'
 
@@ -404,7 +438,16 @@ function BoardInner({
         </button>
       )
     },
-    [clickablePits, animating, displayBoard, onPitClick, stonePattern, showPitCounts, mirrored, accentPit],
+    [
+      clickablePits,
+      animating,
+      displayBoard,
+      onPitClick,
+      stonePattern,
+      showPitCounts,
+      mirrored,
+      accentPit,
+    ],
   )
 
   const renderStore = (storeIndex: number, accent: boolean) => (
@@ -455,29 +498,26 @@ function BoardInner({
         />
       )}
 
-      {animPhase === 'capture' &&
-        capturePhase >= 1 &&
-        captureFromCenter &&
-        captureToCenter && (
-          <motion.div
-            className={
-              'absolute z-20 rounded-full bg-accent shadow-md ' +
-              (effectiveSpeed > 0 ? 'w-3 h-3 md:w-3.5 md:h-3.5' : 'w-2.5 h-2.5 md:w-3 md:h-3')
-            }
-            style={{
-              left: captureFromCenter.x - 7,
-              top: captureFromCenter.y - 7,
-            }}
-            animate={{
-              left: captureToCenter.x - 7,
-              top: captureToCenter.y - 7,
-            }}
-            transition={{
-              duration: getInterval(effectiveSpeed) / 1000,
-              ease: [0.4, 0, 0.2, 1],
-            }}
-          />
-        )}
+      {animPhase === 'capture' && capturePhase >= 1 && captureFromCenter && captureToCenter && (
+        <motion.div
+          className={
+            'absolute z-20 rounded-full bg-accent shadow-md ' +
+            (effectiveSpeed > 0 ? 'w-3 h-3 md:w-3.5 md:h-3.5' : 'w-2.5 h-2.5 md:w-3 md:h-3')
+          }
+          style={{
+            left: captureFromCenter.x - 7,
+            top: captureFromCenter.y - 7,
+          }}
+          animate={{
+            left: captureToCenter.x - 7,
+            top: captureToCenter.y - 7,
+          }}
+          transition={{
+            duration: getInterval(effectiveSpeed) / 1000,
+            ease: [0.4, 0, 0.2, 1],
+          }}
+        />
+      )}
 
       {showExtraToast && (
         <motion.div
@@ -495,12 +535,8 @@ function BoardInner({
       {renderStore(leftStore, animPhase !== 'idle' && leftStore === ownStore)}
 
       <div className="flex flex-col gap-2 flex-1 w-full">
-        <div className="flex gap-1.5 md:gap-2 justify-center">
-          {topRowPits.map(renderPit)}
-        </div>
-        <div className="flex gap-1.5 md:gap-2 justify-center">
-          {bottomRowPits.map(renderPit)}
-        </div>
+        <div className="flex gap-1.5 md:gap-2 justify-center">{topRowPits.map(renderPit)}</div>
+        <div className="flex gap-1.5 md:gap-2 justify-center">{bottomRowPits.map(renderPit)}</div>
       </div>
 
       {renderStore(rightStore, animPhase !== 'idle' && rightStore === ownStore)}

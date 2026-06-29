@@ -94,9 +94,7 @@ function LiveAnalysisPanel({
         {strings.game.liveAnalysisOn}
       </span>
       <span className="text-text font-mono font-bold">{stones}</span>
-      {pvNotation && (
-        <span className="text-muted truncate">{pvNotation}</span>
-      )}
+      {pvNotation && <span className="text-muted truncate">{pvNotation}</span>}
     </motion.div>
   )
 }
@@ -155,11 +153,7 @@ export function GameScreen() {
 
   const isVsBot = mode === 'vs-bot'
 
-  const humanSide: Side | null = isVsBot
-    ? playerSide === 'random'
-      ? 'bottom'
-      : playerSide
-    : null
+  const humanSide: Side | null = isVsBot ? (playerSide === 'random' ? 'bottom' : playerSide) : null
 
   const nextViewFromBottom = isVsBot
     ? humanSide === 'bottom'
@@ -230,8 +224,7 @@ export function GameScreen() {
         const newState = useGameStore.getState().gameState
         if (!newState) return
 
-        const lastMove =
-          newState.moveHistory[newState.moveHistory.length - 1]
+        const lastMove = newState.moveHistory[newState.moveHistory.length - 1]
         if (!lastMove) {
           botInFlight.current = false
           setThinking(false)
@@ -299,14 +292,7 @@ export function GameScreen() {
     if (isVsBot && newState.currentPlayer !== humanSide) {
       doBotMove(newState)
     }
-  }, [
-    isVsBot,
-    humanSide,
-    doBotMove,
-    boardFlip,
-    soundEnabled,
-    hapticsEnabled,
-  ])
+  }, [isVsBot, humanSide, doBotMove, boardFlip, soundEnabled, hapticsEnabled])
 
   const saveToHistory = useCallback(() => {
     if (savedToHistoryRef.current) return
@@ -316,9 +302,8 @@ export function GameScreen() {
     const meta = savedMeta ?? { mode, botLevel, playerSide }
     if (!meta.mode) return
 
-    const humanSideActual = meta.mode === 'vs-bot'
-      ? meta.playerSide === 'random' ? 'bottom' : meta.playerSide
-      : null
+    const humanSideActual =
+      meta.mode === 'vs-bot' ? (meta.playerSide === 'random' ? 'bottom' : meta.playerSide) : null
 
     const playerScore = gs.board[humanSideActual === 'top' ? 13 : 6]!
     const opponentScore = gs.board[humanSideActual === 'top' ? 6 : 13]!
@@ -332,9 +317,10 @@ export function GameScreen() {
       result = gs.winner === 'bottom' ? 'win' : gs.winner === 'top' ? 'loss' : 'draw'
     }
 
-    const opponentLabel = meta.mode === 'vs-bot'
-      ? `${strings.game.bot}${meta.botLevel ? ' (' + meta.botLevel + ')' : ''}`
-      : strings.game.player2
+    const opponentLabel =
+      meta.mode === 'vs-bot'
+        ? `${strings.game.bot}${meta.botLevel ? ' (' + meta.botLevel + ')' : ''}`
+        : strings.game.player2
 
     const record: GameRecord = {
       id: crypto.randomUUID(),
@@ -385,16 +371,7 @@ export function GameScreen() {
     const fp = humanSide ?? 'bottom'
     reset(fp)
     if (mode) setSavedMeta({ mode, botLevel, playerSide })
-  }, [
-    cancelBot,
-    cancelAnalysis,
-    reset,
-    humanSide,
-    mode,
-    botLevel,
-    playerSide,
-    setSavedMeta,
-  ])
+  }, [cancelBot, cancelAnalysis, reset, humanSide, mode, botLevel, playerSide, setSavedMeta])
 
   const handleHome = useCallback(() => {
     cancelBot()
@@ -451,9 +428,7 @@ export function GameScreen() {
 
   const takebackAllowed = useMemo(
     () =>
-      gameState !== null &&
-      gameState.moveHistory.length > 0 &&
-      gameState.status === 'in-progress',
+      gameState !== null && gameState.moveHistory.length > 0 && gameState.status === 'in-progress',
     [gameState],
   )
 
@@ -546,9 +521,7 @@ export function GameScreen() {
 
       if (e.key >= '1' && e.key <= '6') {
         const idx = parseInt(e.key, 10) - 1
-        const row = displayViewFromBottom
-          ? [0, 1, 2, 3, 4, 5]
-          : [7, 8, 9, 10, 11, 12]
+        const row = displayViewFromBottom ? [0, 1, 2, 3, 4, 5] : [7, 8, 9, 10, 11, 12]
         if (idx >= 0 && idx < row.length) {
           const pitIndex = row[idx]!
           if (clickablePits.includes(pitIndex)) {
@@ -597,8 +570,7 @@ export function GameScreen() {
   if (!mode && !gameState) return <Navigate to="/home" replace />
   if (!gameState) return null
 
-  const currentPlayerLabel =
-    displayCurrentPlayer === 'bottom' ? bottomLabel : topLabel
+  const currentPlayerLabel = displayCurrentPlayer === 'bottom' ? bottomLabel : topLabel
 
   const boardKey = displayViewFromBottom ? 'normal' : 'flipped'
 
@@ -610,14 +582,7 @@ export function GameScreen() {
 
   return (
     <div className="min-h-screen p-3 md:p-4 flex flex-col items-center gap-3 max-w-4xl mx-auto relative">
-      <div className="flex items-center justify-between w-full max-w-xl mx-auto">
-        <button
-          type="button"
-          onClick={handleHome}
-          className="text-accent hover:underline text-sm"
-        >
-          &larr; {strings.game.home}
-        </button>
+      <div className="flex items-center justify-end w-full max-w-xl mx-auto">
         <div className="flex items-center gap-3">
           {!isVsBot && !boardLocked && gameState.status === 'in-progress' && (
             <button
@@ -625,9 +590,7 @@ export function GameScreen() {
               onClick={() => setPitCountsVisible((v) => !v)}
               className="text-accent/70 hover:text-accent text-xs"
             >
-              {pitCountsVisible
-                ? strings.game.hideCounts
-                : strings.game.showCounts}
+              {pitCountsVisible ? strings.game.hideCounts : strings.game.showCounts}
             </button>
           )}
           {!isVsBot && takebackAllowed && (
@@ -669,8 +632,7 @@ export function GameScreen() {
       <div className="h-6 flex items-center justify-center gap-3">
         {!isVsBot &&
           boardFlip &&
-          displayCurrentPlayer ===
-            (displayViewFromBottom ? 'bottom' : 'top') && (
+          displayCurrentPlayer === (displayViewFromBottom ? 'bottom' : 'top') && (
             <span className="text-accent text-sm font-medium">
               {strings.game.passTo} {currentPlayerLabel}
             </span>

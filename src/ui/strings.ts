@@ -1,5 +1,13 @@
 export const strings = {
   appTitle: 'Mancala',
+  nav: {
+    play: 'Play',
+    home: 'Home',
+    history: 'History',
+    stats: 'Stats',
+    settings: 'Settings',
+    back: 'Back',
+  },
   home: {
     playVsBot: 'Play vs Bot',
     local2Player: 'Local 2-Player',
@@ -127,7 +135,7 @@ export const strings = {
       },
       {
         title: 'Sowing Stones',
-        text: 'Pick a pit on your side. All its stones are picked up and sown one-by-one counterclockwise into the following pits. Skip your opponent\'s store — only your own store collects during sowing.',
+        text: "Pick a pit on your side. All its stones are picked up and sown one-by-one counterclockwise into the following pits. Skip your opponent's store — only your own store collects during sowing.",
       },
       {
         title: 'Extra Turn',
@@ -135,11 +143,11 @@ export const strings = {
       },
       {
         title: 'Captures',
-        text: 'If the last stone lands in an empty pit on your side, you capture that stone plus all stones in the pit directly opposite on the opponent\'s side. They go into your store.',
+        text: "If the last stone lands in an empty pit on your side, you capture that stone plus all stones in the pit directly opposite on the opponent's side. They go into your store.",
       },
       {
         title: 'Game End',
-        text: 'The game ends when one player\'s side is completely empty. The opponent collects all remaining stones from their side into their store. The player with the most stones wins.',
+        text: "The game ends when one player's side is completely empty. The opponent collects all remaining stones from their side into their store. The player with the most stones wins.",
       },
       {
         title: 'Pro Tip',

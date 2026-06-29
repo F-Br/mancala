@@ -61,13 +61,7 @@ function decodeHeader(inner: string): GameState {
   const status: GameStatus = parts[2] === 'f' ? 'finished' : 'in-progress'
   const winnerRaw = parts[3]!
   const winner: GameState['winner'] =
-    winnerRaw === 'n'
-      ? null
-      : winnerRaw === 'b'
-        ? 'bottom'
-        : winnerRaw === 't'
-          ? 'top'
-          : 'draw'
+    winnerRaw === 'n' ? null : winnerRaw === 'b' ? 'bottom' : winnerRaw === 't' ? 'top' : 'draw'
 
   return {
     board,

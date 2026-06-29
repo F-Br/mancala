@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useHistoryStore } from '../../state/historyStore'
 import type { BotLevel } from '../../bots/types'
 import type { ClassificationKey } from '../theme'
@@ -21,7 +20,6 @@ function classifyEvalDrop(drop: number): ClassificationKey {
 }
 
 export function StatsScreen() {
-  const navigate = useNavigate()
   const records = useHistoryStore((s) => s.records)
 
   const stats = useMemo(() => {
@@ -42,9 +40,7 @@ export function StatsScreen() {
       }
     }
 
-    const analyzedRecords = records.filter(
-      (r) => r.analysisResult && r.analysisResult.length > 0,
-    )
+    const analyzedRecords = records.filter((r) => r.analysisResult && r.analysisResult.length > 0)
 
     const classCounts: Partial<Record<ClassificationKey, number>> = {}
     let totalClassified = 0
@@ -68,35 +64,26 @@ export function StatsScreen() {
     return { total, wins, losses, draws, byLevel, classCounts, totalClassified, blundersPerGame }
   }, [records])
 
-  const labelOrder: ClassificationKey[] = ['best', 'excellent', 'good', 'inaccuracy', 'mistake', 'blunder']
+  const labelOrder: ClassificationKey[] = [
+    'best',
+    'excellent',
+    'good',
+    'inaccuracy',
+    'mistake',
+    'blunder',
+  ]
 
   const blunderMax = Math.max(1, ...stats.blundersPerGame)
 
   return (
     <main className="min-h-screen p-4 flex flex-col items-center gap-4 max-w-lg mx-auto">
-      <div className="flex items-center justify-between w-full">
-        <button
-          type="button"
-          onClick={() => navigate('/home')}
-          className="text-accent hover:underline text-sm"
-        >
-          &larr; {strings.game.home}
-        </button>
-        <h1 className="text-lg font-bold text-text">{strings.stats.title}</h1>
-        <div className="w-12" />
-      </div>
+      <h1 className="text-display-md font-display font-semibold text-text">
+        {strings.stats.title}
+      </h1>
 
       {stats.total === 0 ? (
         <div className="bg-board/30 rounded-2xl p-8 flex flex-col items-center gap-4 text-center mt-8">
           <h2 className="text-xl font-bold text-text">{strings.stats.empty}</h2>
-          <p className="text-sm text-muted">{strings.stats.empty}</p>
-          <button
-            type="button"
-            onClick={() => navigate('/home')}
-            className="mt-2 px-4 py-2 rounded-xl bg-accent text-bg font-semibold hover:brightness-110 text-sm"
-          >
-            Play a Game
-          </button>
         </div>
       ) : (
         <>
@@ -108,16 +95,12 @@ export function StatsScreen() {
           </div>
 
           <div className="w-full bg-board/30 rounded-2xl p-4">
-            <p className="text-sm font-medium text-text mb-2">
-              {strings.stats.byBotLevel}
-            </p>
+            <p className="text-sm font-medium text-text mb-2">{strings.stats.byBotLevel}</p>
             {Object.keys(stats.byLevel).length === 0 ? (
               <p className="text-xs text-muted">No bot games played.</p>
             ) : (
               <div className="flex flex-col gap-2">
-                {(
-                  ['beginner', 'casual', 'strong', 'expert'] as BotLevel[]
-                ).map((level) => {
+                {(['beginner', 'casual', 'strong', 'expert'] as BotLevel[]).map((level) => {
                   const s = stats.byLevel[level]
                   if (!s) return null
                   const rate = s.total > 0 ? ((s.wins / s.total) * 100).toFixed(0) : '0'
@@ -127,9 +110,7 @@ export function StatsScreen() {
                       <span className="text-muted text-xs">
                         {s.wins}W / {s.losses}L / {s.draws}D
                       </span>
-                      <span className="text-accent font-bold text-xs">
-                        {rate}%
-                      </span>
+                      <span className="text-accent font-bold text-xs">{rate}%</span>
                     </div>
                   )
                 })}
@@ -138,9 +119,7 @@ export function StatsScreen() {
           </div>
 
           <div className="w-full bg-board/30 rounded-2xl p-4">
-            <p className="text-sm font-medium text-text mb-2">
-              {strings.stats.classificationDist}
-            </p>
+            <p className="text-sm font-medium text-text mb-2">{strings.stats.classificationDist}</p>
             {stats.totalClassified === 0 ? (
               <p className="text-xs text-muted">{strings.stats.noAnalysisData}</p>
             ) : (
@@ -169,14 +148,15 @@ export function StatsScreen() {
           </div>
 
           <div className="w-full bg-board/30 rounded-2xl p-4">
-            <p className="text-sm font-medium text-text mb-2">
-              {strings.stats.blundersOverTime}
-            </p>
+            <p className="text-sm font-medium text-text mb-2">{strings.stats.blundersOverTime}</p>
             {stats.blundersPerGame.length < 2 ? (
               <p className="text-xs text-muted">Need at least 2 analyzed games.</p>
             ) : (
               <div className="w-full h-24">
-                <svg viewBox={`0 0 ${Math.max(100, stats.blundersPerGame.length * 40)} 80`} className="w-full h-full">
+                <svg
+                  viewBox={`0 0 ${Math.max(100, stats.blundersPerGame.length * 40)} 80`}
+                  className="w-full h-full"
+                >
                   {stats.blundersPerGame.map((blunders, i) => {
                     const x = i * 40 + 20
                     const y = 70 - (blunders / blunderMax) * 60
@@ -200,26 +180,23 @@ export function StatsScreen() {
                           fill="var(--theme-mistake)"
                           className="cursor-pointer"
                         />
-                        <text
-                          x={x}
-                          y={78}
-                          textAnchor="middle"
-                          className="text-[8px] fill-muted"
-                        >
+                        <text x={x} y={78} textAnchor="middle" className="text-[8px] fill-muted">
                           #{i + 1}
                         </text>
-                        <text
-                          x={x}
-                          y={y - 6}
-                          textAnchor="middle"
-                          className="text-[8px] fill-text"
-                        >
+                        <text x={x} y={y - 6} textAnchor="middle" className="text-[8px] fill-text">
                           {blunders}
                         </text>
                       </g>
                     )
                   })}
-                  <line x1={10} y1={70} x2={stats.blundersPerGame.length * 40 + 10} y2={70} stroke="var(--theme-board)" strokeWidth={0.5} />
+                  <line
+                    x1={10}
+                    y1={70}
+                    x2={stats.blundersPerGame.length * 40 + 10}
+                    y2={70}
+                    stroke="var(--theme-board)"
+                    strokeWidth={0.5}
+                  />
                 </svg>
               </div>
             )}

@@ -133,10 +133,7 @@ function computeMoveDetails(
   }
 }
 
-export function legalMoves(
-  state: GameState,
-  rules: RuleConfig = KALAH_STANDARD,
-): number[] {
+export function legalMoves(state: GameState, rules: RuleConfig = KALAH_STANDARD): number[] {
   if (state.status === 'finished') return []
 
   const { pitsPerSide } = rules
@@ -166,12 +163,7 @@ export function applyMove(
     return cloneState(state)
   }
 
-  const { newBoard, move } = computeMoveDetails(
-    state.board,
-    pitIndex,
-    state.currentPlayer,
-    rules,
-  )
+  const { newBoard, move } = computeMoveDetails(state.board, pitIndex, state.currentPlayer, rules)
 
   let nextPlayer: Side
   if (move.wasExtraTurn) {

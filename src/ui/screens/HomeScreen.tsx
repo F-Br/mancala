@@ -10,9 +10,7 @@ export function HomeScreen() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-8 p-4">
-      <h1 className="text-6xl font-bold tracking-tight text-accent">
-        {strings.appTitle}
-      </h1>
+      <h1 className="text-6xl font-bold tracking-tight text-accent">{strings.appTitle}</h1>
 
       <div className="flex flex-col gap-3 w-full max-w-xs">
         {gameState && (

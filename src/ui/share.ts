@@ -1,10 +1,7 @@
 import LZString from 'lz-string'
 
 export function encodeShareGame(gameText: string): string {
-  const b64 = btoa(gameText)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
+  const b64 = btoa(gameText).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   const prefix = 'b64:'
   const candidate = prefix + b64
   if (candidate.length <= 250) return candidate
@@ -27,10 +24,7 @@ export function decodeShareGame(encoded: string): string | null {
   }
 }
 
-export async function shareGame(
-  gameText: string,
-  title: string,
-): Promise<void> {
+export async function shareGame(gameText: string, title: string): Promise<void> {
   const encoded = encodeShareGame(gameText)
   const url = `${window.location.origin}/?game=${encoded}`
 

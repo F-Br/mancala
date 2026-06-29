@@ -34,15 +34,11 @@ export function BotSelectScreen() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-8 p-4">
-      <h1 className="text-3xl font-bold text-text">
-        {strings.botSelect.title}
-      </h1>
+      <h1 className="text-3xl font-bold text-text">{strings.botSelect.title}</h1>
 
       <div className="flex flex-col gap-6 w-full max-w-xs">
         <div className="flex flex-col gap-2">
-          <label className="text-sm text-muted font-medium">
-            {strings.botSelect.level}
-          </label>
+          <label className="text-sm text-muted font-medium">{strings.botSelect.level}</label>
           <div className="flex flex-wrap gap-2">
             {levels.map((lvl) => (
               <button
@@ -63,9 +59,7 @@ export function BotSelectScreen() {
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-sm text-muted font-medium">
-            {strings.botSelect.side}
-          </label>
+          <label className="text-sm text-muted font-medium">{strings.botSelect.side}</label>
           <div className="flex gap-2">
             {sides.map((s) => (
               <button
