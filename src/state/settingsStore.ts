@@ -3,8 +3,6 @@ import { persist } from 'zustand/middleware'
 import type { ThemeKey } from '../ui/theme'
 import { defaultThemeKey } from '../ui/theme'
 
-export type StonePattern = 'random' | 'symmetric'
-
 export interface SettingsState {
   theme: ThemeKey
   boardFlip: boolean
@@ -13,7 +11,6 @@ export interface SettingsState {
   animationSpeed: number
   liveHintsEnabled: boolean
   tutorialSeen: boolean
-  stonePattern: StonePattern
   showPitCounts: boolean
   setTheme: (key: ThemeKey) => void
   setBoardFlip: (v: boolean) => void
@@ -22,7 +19,6 @@ export interface SettingsState {
   setAnimationSpeed: (v: number) => void
   setLiveHintsEnabled: (v: boolean) => void
   setTutorialSeen: (v: boolean) => void
-  setStonePattern: (v: StonePattern) => void
   setShowPitCounts: (v: boolean) => void
   resetAll: () => void
 }
@@ -35,7 +31,6 @@ const defaults = {
   animationSpeed: 1,
   liveHintsEnabled: false,
   tutorialSeen: false,
-  stonePattern: 'random' as StonePattern,
   showPitCounts: false,
 }
 
@@ -50,7 +45,6 @@ export const useSettingsStore = create<SettingsState>()(
       setAnimationSpeed: (animationSpeed) => set({ animationSpeed }),
       setLiveHintsEnabled: (liveHintsEnabled) => set({ liveHintsEnabled }),
       setTutorialSeen: (tutorialSeen) => set({ tutorialSeen }),
-      setStonePattern: (stonePattern) => set({ stonePattern }),
       setShowPitCounts: (showPitCounts) => set({ showPitCounts }),
       resetAll: () => set(defaults),
     }),

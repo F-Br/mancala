@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom'
 import { useSettingsStore } from '../../state/settingsStore'
-import type { StonePattern } from '../../state/settingsStore'
 import { useTheme, themeKeys } from '../theme'
 import type { ThemeKey } from '../theme'
 import { strings } from '../strings'
@@ -10,11 +9,6 @@ const themeLabels: Record<ThemeKey, string> = {
   'dark-museum': strings.settings.darkMuseum,
   'modern-desert': strings.settings.modernDesert,
 }
-
-const patternOptions: { key: StonePattern; label: string }[] = [
-  { key: 'random', label: strings.settings.stonePatternRandom },
-  { key: 'symmetric', label: strings.settings.stonePatternSymmetric },
-]
 
 export function SettingsScreen() {
   const navigate = useNavigate()
@@ -81,26 +75,6 @@ export function SettingsScreen() {
             <span>0</span>
             <span>{settings.animationSpeed.toFixed(1)}x</span>
             <span>2</span>
-          </div>
-        </Section>
-
-        <Section label={strings.settings.stonePattern}>
-          <div className="flex gap-2">
-            {patternOptions.map((opt) => (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => settings.setStonePattern(opt.key)}
-                className={
-                  'flex-1 py-2 rounded-xl text-sm font-medium border-2 transition-colors ' +
-                  (settings.stonePattern === opt.key
-                    ? 'bg-accent text-bg border-accent'
-                    : 'bg-board/60 text-text border-board/40 hover:bg-board')
-                }
-              >
-                {opt.label}
-              </button>
-            ))}
           </div>
         </Section>
 

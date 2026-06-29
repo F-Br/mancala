@@ -29,6 +29,7 @@
   --color-surface: var(--theme-surface);
   --color-surface-2: var(--theme-surface-2);
   --color-border: var(--theme-border);
+  --color-highlight: var(--theme-highlight);
   --color-best: var(--theme-best);
   --color-excellent: var(--theme-excellent);
   --color-good: var(--theme-good);
@@ -56,6 +57,7 @@
 
   /* ── Radius ───────────────────────────────────────────────────── */
   --radius-chip: 12px;
+  --radius-md: 16px;
   --radius-card: 20px;
   --radius-board: 28px;
   --radius-pill: 9999px;
@@ -63,6 +65,90 @@
   /* ── Shadows ──────────────────────────────────────────────────── */
   --shadow-contact: var(--theme-shadow-contact);
   --shadow-card: var(--theme-shadow-card);
+}
+
+/*
+ * ─── Board slab ─────────────────────────────────────────────────
+ * Single continuous rounded surface with vertical gradient, top-
+ * inset highlight, and card shadow.
+ */
+.board-slab {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--color-board) 90%, white),
+    color-mix(in srgb, var(--color-board) 88%, black)
+  );
+  box-shadow:
+    inset 0 1px 0 var(--theme-highlight),
+    var(--shadow-card);
+  border-radius: var(--radius-board);
+}
+
+/* ─── Well (pit) – circular concave hollow ───────────────────── */
+.well-pit {
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 25%,
+    color-mix(in srgb, var(--color-board) 70%, black),
+    color-mix(in srgb, var(--color-board) 92%, black)
+  );
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+/* ─── Well (store) – rounded-rectangle concave hollow ────────── */
+.well-store {
+  border-radius: var(--radius-md);
+  background: radial-gradient(
+    ellipse at 50% 30%,
+    color-mix(in srgb, var(--color-board) 65%, black),
+    color-mix(in srgb, var(--color-board) 90%, black)
+  );
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+/* ─── Stone 3D disc ──────────────────────────────────────────── */
+.stone-3d {
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    color-mix(in srgb, var(--color-stone) 100%, white 12%),
+    var(--color-stone) 55%,
+    color-mix(in srgb, var(--color-stone) 68%, black)
+  );
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.stone-3d::after {
+  content: '';
+  position: absolute;
+  top: 12%;
+  left: 12%;
+  width: 34%;
+  height: 34%;
+  background: radial-gradient(
+    circle at 40% 35%,
+    rgba(255, 255, 255, 0.5) 0%,
+    transparent 65%
+  );
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* ─── Accent glow for selectable pits ────────────────────────── */
+.glow-accent {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 0 0 2px var(--color-accent),
+    0 0 14px color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+.hover-glow:hover {
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 0 0 2px var(--color-accent),
+    0 0 18px color-mix(in srgb, var(--color-accent) 25%, transparent);
 }
 
 /*

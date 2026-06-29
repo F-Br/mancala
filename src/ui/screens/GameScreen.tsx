@@ -119,7 +119,6 @@ export function GameScreen() {
   const animationSpeed = useSettingsStore((s) => s.animationSpeed)
   const soundEnabled = useSettingsStore((s) => s.soundEnabled)
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled)
-  const stonePattern = useSettingsStore((s) => s.stonePattern)
   const showPitCounts = useSettingsStore((s) => s.showPitCounts)
   const liveHintsEnabled = useSettingsStore((s) => s.liveHintsEnabled)
 
@@ -678,7 +677,6 @@ export function GameScreen() {
             onStoneLanded={handleStoneLanded}
             onCapture={handleCaptureEvent}
             onExtraTurn={handleExtraTurnEvent}
-            stonePattern={stonePattern}
             showPitCounts={showPitCounts || pitCountsVisible}
             accentPit={accentPit}
           />
