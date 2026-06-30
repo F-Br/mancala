@@ -134,6 +134,12 @@ export const strings = {
     blundersOverTime: 'Blunders per Game',
     refresh: 'Refresh Stats',
     empty: 'No games yet. Play some games to see statistics!',
+    accuracyOverTime: 'Best Move % per Game',
+    avgAccuracy: 'Avg Best Move',
+    avgGameLength: 'Avg Game Length',
+    accuracy: 'Accuracy',
+    needMoreGames: 'Need at least 2 analyzed games for a trend chart.',
+    noBotGames: 'No bot games played.',
   },
   tutorial: {
     title: 'How to Play Mancala',
