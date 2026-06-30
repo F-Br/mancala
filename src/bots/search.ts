@@ -311,16 +311,19 @@ function minimaxWithABTT(
   let ttBestMove: number | undefined
 
   if (entry && entry.depth >= depth) {
-    if (entry.flag === 'exact') {
-      return { score: entry.score, pv: [entry.bestMove] }
+    // Don't return early on exact hits — we need the full PV.
+    // Instead use the TT bounds to tighten alpha/beta and for move ordering.
+    if (entry.flag === 'exact' || entry.flag === 'lower') {
+      if (entry.score > alpha) {
+        alpha = entry.score
+        ttBestMove = entry.bestMove
+      }
     }
-    if (entry.flag === 'lower' && entry.score > alpha) {
-      alpha = entry.score
-      ttBestMove = entry.bestMove
-    }
-    if (entry.flag === 'upper' && entry.score < beta) {
-      beta = entry.score
-      ttBestMove = entry.bestMove
+    if (entry.flag === 'exact' || entry.flag === 'upper') {
+      if (entry.score < beta) {
+        beta = entry.score
+        ttBestMove = entry.bestMove
+      }
     }
     if (alpha >= beta) {
       return { score: entry.score, pv: [entry.bestMove] }
