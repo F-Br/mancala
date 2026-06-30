@@ -16,6 +16,7 @@ import { gameToText } from '../../engine'
 import { strings } from '../strings'
 import { Board } from '../components/Board'
 import { Chip } from '../components/Chip'
+import { ScorePanel } from '../components/ScorePanel'
 import { EvalGraph, type EvalGraphPoint } from '../components/EvalGraph'
 
 function classifyEvalDrop(drop: number): ClassificationKey {
@@ -403,12 +404,26 @@ export function ReviewScreen() {
 
   const displayState = showPV && pvStates[pvStep] ? pvStates[pvStep] : (currentPos?.state ?? null)
 
+  // Primary accent: the move the player actually played (or PV step during playback)
   const accentPitForDisplay =
     showPV && pvMoves[pvStep] != null
       ? pvMoves[pvStep]
-      : playedMoveNotBest && currentEntry
-        ? currentEntry.bestPitIndex
-        : null
+      : currentPos?.move?.pitIndex ?? null
+
+  // Secondary accent: the recommended/best move (only when it differs from played)
+  const secondaryAccentPit =
+    !showPV && playedMoveNotBest && currentEntry
+      ? currentEntry.bestPitIndex
+      : null
+
+  const secondaryAccentColor =
+    secondaryAccentPit != null && currentEntry
+      ? classificationColors[classifyEvalDrop(currentEntry.bestEval - currentEntry.playedEval)]
+      : undefined
+
+  const board = displayState?.board
+  const bottomScore = board?.[6] ?? 0
+  const topScore = board?.[13] ?? 0
 
   const isShared = locationState?.shared === true
 
@@ -563,19 +578,38 @@ export function ReviewScreen() {
           {/* LEFT column: Board + Controls */}
           <div className="flex flex-col items-center gap-4">
             {displayState && (
-              <Board
-                gameState={displayState}
-                viewFromBottom={viewFromBottom}
-                clickablePits={[]}
-                onPitClick={() => {}}
-                pendingMove={null}
-                prevBoard={null}
-                effectiveSpeed={0}
-                onAnimationComplete={() => {}}
-                showPitCounts={showPitCounts}
-                accentPit={accentPitForDisplay}
-                className="max-w-none"
-              />
+              <>
+                <ScorePanel
+                  bottomLabel={
+                    savedMeta?.mode === 'vs-bot'
+                      ? (playerSide === 'bottom' ? strings.game.you : strings.game.bot)
+                      : strings.game.player1
+                  }
+                  topLabel={
+                    savedMeta?.mode === 'vs-bot'
+                      ? (playerSide === 'top' ? strings.game.you : strings.game.bot)
+                      : strings.game.player2
+                  }
+                  bottomScore={bottomScore}
+                  topScore={topScore}
+                  currentPlayer={displayState.currentPlayer}
+                />
+                <Board
+                  gameState={displayState}
+                  viewFromBottom={viewFromBottom}
+                  clickablePits={[]}
+                  onPitClick={() => {}}
+                  pendingMove={null}
+                  prevBoard={null}
+                  effectiveSpeed={0}
+                  onAnimationComplete={() => {}}
+                  showPitCounts={showPitCounts}
+                  accentPit={accentPitForDisplay}
+                  secondaryAccentPit={secondaryAccentPit}
+                  {...(secondaryAccentColor ? { secondaryAccentColor } : {})}
+                  className="max-w-none"
+                />
+              </>
             )}
 
             {/* Scrubber bar */}

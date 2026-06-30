@@ -17,6 +17,8 @@ interface BoardProps {
   onExtraTurn?: () => void
   showPitCounts?: boolean
   accentPit?: number | null
+  secondaryAccentPit?: number | null
+  secondaryAccentColor?: string
   className?: string
 }
 
@@ -156,6 +158,8 @@ function BoardInner({
   onExtraTurn,
   showPitCounts = false,
   accentPit = null,
+  secondaryAccentPit = null,
+  secondaryAccentColor,
   className = '',
 }: BoardProps) {
   const boardRef = useRef<HTMLDivElement>(null)
@@ -334,6 +338,7 @@ function BoardInner({
       const count = displayBoard[pitIndex]!
       const enabled = clickable && count > 0
       const isAccent = accentPit === pitIndex
+      const isSecondary = !isAccent && secondaryAccentPit === pitIndex
       return (
         <button
           key={pitIndex}
@@ -346,9 +351,16 @@ function BoardInner({
             'relative w-11 h-11 md:w-14 md:h-14 well-pit ' +
             (isAccent
               ? 'glow-accent cursor-pointer hover:scale-105 active:scale-95 transition-all duration-150'
-              : enabled
-                ? 'cursor-pointer hover:scale-105 hover:glow-accent active:scale-95 transition-all duration-150'
-                : 'opacity-60 cursor-default')
+              : isSecondary
+                ? 'glow-classification cursor-default'
+                : enabled
+                  ? 'cursor-pointer hover:scale-105 hover:glow-accent active:scale-95 transition-all duration-150'
+                  : 'opacity-60 cursor-default')
+          }
+          style={
+            isSecondary && secondaryAccentColor
+              ? ({ '--glow-classification-color': secondaryAccentColor } as React.CSSProperties)
+              : undefined
           }
         >
           <StoneCluster
@@ -367,6 +379,8 @@ function BoardInner({
       onPitClick,
       showPitCounts,
       accentPit,
+      secondaryAccentPit,
+      secondaryAccentColor,
     ],
   )
 
