@@ -14,6 +14,9 @@ import { classificationColors, type ClassificationKey } from '../theme'
 import { shareGame } from '../share'
 import { gameToText } from '../../engine'
 import { strings } from '../strings'
+import { Board } from '../components/Board'
+import { Chip } from '../components/Chip'
+import { EvalGraph, type EvalGraphPoint } from '../components/EvalGraph'
 
 function classifyEvalDrop(drop: number): ClassificationKey {
   if (drop <= 0.3) return 'excellent'
@@ -97,315 +100,6 @@ function replayPositions(
   return positions
 }
 
-function EvalGraph({
-  positions,
-  cache,
-  savedMeta,
-  currentIndex,
-  onSelectIndex,
-}: {
-  positions: PositionInfo[]
-  cache: AnalysisCacheEntry[]
-  savedMeta: SavedMeta | null
-  currentIndex: number
-  onSelectIndex: (index: number) => void
-}) {
-  const [hovered, setHovered] = useState<number | null>(null)
-
-  const playerSide: Side | null =
-    savedMeta?.mode === 'vs-bot'
-      ? savedMeta.playerSide === 'random'
-        ? 'bottom'
-        : savedMeta.playerSide
-      : savedMeta?.mode === 'local-2p'
-        ? 'bottom'
-        : null
-
-  const movePositions = positions.filter((p) => p.move)
-  const dataPoints = movePositions.map((pos) => {
-    const entry = cache[pos.index]
-    if (!entry) return null
-    let clampedEval = Math.max(-15, Math.min(15, entry.bestEval))
-    if (playerSide && pos.player !== playerSide) {
-      clampedEval = -clampedEval
-    }
-    return { x: pos.index, eval: clampedEval, player: pos.player }
-  })
-
-  const valid = dataPoints.filter((d): d is { x: number; eval: number; player: Side } => d !== null)
-  if (valid.length < 2) return null
-
-  const padding = { left: 44, right: 16, top: 20, bottom: 36 }
-  const width = 620
-  const height = 200
-  const innerW = width - padding.left - padding.right
-  const innerH = height - padding.top - padding.bottom
-
-  const maxEval = Math.max(1, ...valid.map((d) => Math.abs(d.eval)))
-  const yRange = maxEval * 1.2
-
-  const toX = (x: number) => padding.left + (x / Math.max(1, valid.length - 1)) * innerW
-  const toY = (e: number) => padding.top + innerH / 2 - (e / yRange) * (innerH / 2)
-
-  const linePath = valid
-    .map((d, i) => `${i === 0 ? 'M' : 'L'} ${toX(d.x)} ${toY(d.eval)}`)
-    .join(' ')
-
-  const areaPath = [
-    linePath,
-    `L ${toX(valid[valid.length - 1]!.x)} ${toY(0)}`,
-    `L ${toX(valid[0]!.x)} ${toY(0)}`,
-    'Z',
-  ].join(' ')
-
-  const zeroY = toY(0)
-  const topLabel = playerSide ? playerNameShort(playerSide, savedMeta) : strings.game.player1
-  const bottomLabel = playerSide
-    ? playerNameShort(playerSide === 'bottom' ? 'top' : 'bottom', savedMeta)
-    : strings.game.player2
-
-  return (
-    <div className="w-full overflow-x-auto">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-48 md:h-52">
-        {/* Y-axis labels */}
-        <text x={6} y={padding.top + 10} className="text-[8px] fill-muted">
-          +{maxEval.toFixed(0)}
-        </text>
-        <text x={6} y={zeroY + 3} className="text-[8px] fill-muted">
-          0
-        </text>
-        <text x={6} y={height - padding.bottom + 6} className="text-[8px] fill-muted">
-          -{maxEval.toFixed(0)}
-        </text>
-
-        {/* Player advantage labels on Y axis */}
-        <text
-          x={padding.left - 2}
-          y={padding.top - 2}
-          className="text-[8px] fill-muted"
-          textAnchor="end"
-        >
-          {topLabel}
-        </text>
-        <text
-          x={padding.left - 2}
-          y={height - padding.bottom + 10}
-          className="text-[8px] fill-muted"
-          textAnchor="end"
-        >
-          {bottomLabel}
-        </text>
-
-        {/* Zero line */}
-        <line
-          x1={padding.left}
-          y1={zeroY}
-          x2={width - padding.right}
-          y2={zeroY}
-          stroke="currentColor"
-          strokeOpacity={0.12}
-          strokeWidth={1}
-        />
-
-        {/* Area */}
-        <path d={areaPath} fill="var(--theme-accent)" fillOpacity={0.08} />
-
-        {/* Line */}
-        <path
-          d={linePath}
-          fill="none"
-          stroke="var(--theme-accent)"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Data points */}
-        {valid.map((d, i) => {
-          const cx = toX(d.x)
-          const cy = toY(d.eval)
-          const isActive = d.x === currentIndex
-          const isHovered = d.x === hovered
-          return (
-            <g key={i}>
-              {(isHovered || isActive) && (
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={10}
-                  fill="var(--theme-accent)"
-                  fillOpacity={0.15}
-                  className="cursor-pointer"
-                  onClick={() => onSelectIndex(d.x)}
-                />
-              )}
-              <circle
-                cx={cx}
-                cy={cy}
-                r={isActive ? 5 : 3}
-                fill="var(--theme-accent)"
-                fillOpacity={isActive ? 1 : 0.8}
-                className="cursor-pointer"
-                onMouseEnter={() => setHovered(d.x)}
-                onMouseLeave={() => setHovered(null)}
-                onClick={() => onSelectIndex(d.x)}
-              />
-              {isHovered && !isActive && (
-                <>
-                  <rect
-                    x={cx - 18}
-                    y={cy - 24}
-                    width={36}
-                    height={16}
-                    rx={4}
-                    fill="var(--theme-bg)"
-                    stroke="var(--theme-accent)"
-                    strokeWidth={0.5}
-                  />
-                  <text x={cx} y={cy - 12} textAnchor="middle" className="text-[9px] fill-text">
-                    #{d.x + 1}
-                  </text>
-                </>
-              )}
-            </g>
-          )
-        })}
-      </svg>
-    </div>
-  )
-}
-
-function MoveListPanel({
-  positions,
-  cache,
-  currentIndex,
-  onSelect,
-  savedMeta,
-}: {
-  positions: PositionInfo[]
-  cache: AnalysisCacheEntry[]
-  currentIndex: number
-  onSelect: (index: number) => void
-  savedMeta: SavedMeta | null
-}) {
-  const movePositions = positions.filter((p) => p.move)
-
-  return (
-    <div className="flex flex-col gap-0.5 max-h-64 overflow-y-auto">
-      {movePositions.map((pos) => {
-        const entry = cache[pos.index]
-        if (!entry) return null
-
-        const playedMove = pos.move!
-        const index = pos.index
-        const isBest = playedMove.pitIndex === entry.bestPitIndex
-        const evalDrop = isBest ? 0 : Math.max(0, entry.bestEval - entry.playedEval)
-        const cls = isBest ? 'best' : classifyEvalDrop(evalDrop)
-        const color = classificationColors[cls]
-
-        const playedNotation = notatePit(playedMove.pitIndex)
-        const bestNotation = notatePit(entry.bestPitIndex)
-        const humanRow = isHumanPos(pos, savedMeta)
-        const isBotMode = savedMeta?.mode === 'vs-bot'
-
-        return (
-          <button
-            key={index}
-            type="button"
-            onClick={() => onSelect(index)}
-            className={
-              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ' +
-              (currentIndex === index
-                ? 'bg-accent/15 text-text'
-                : isBotMode
-                  ? humanRow
-                    ? 'bg-board/20 hover:bg-board/30 text-text'
-                    : 'bg-board/5 hover:bg-board/20 text-text'
-                  : 'hover:bg-board/30 text-text')
-            }
-          >
-            <span
-              className="w-2.5 h-2.5 rounded-full shrink-0"
-              style={{ backgroundColor: color }}
-            />
-            <span className="text-muted w-5 text-left text-xs font-mono">{index + 1}</span>
-            {isBotMode && (
-              <span className="text-muted/60 w-5 text-right text-[10px]">
-                {humanRow ? 'Y' : 'B'}
-              </span>
-            )}
-            <span className="font-mono font-bold">{playedNotation}</span>
-            {!isBest && playedNotation !== bestNotation && (
-              <span className="text-muted text-xs ml-1">(&rarr; {bestNotation})</span>
-            )}
-            {!isBest && (
-              <span className="ml-auto text-[11px] font-medium" style={{ color }}>
-                {evalDrop > 0.01 ? `-${evalDrop.toFixed(1)}` : ''}
-              </span>
-            )}
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0"
-              style={{
-                backgroundColor: color + '22',
-                color,
-              }}
-            >
-              {classificationLabel[cls]}
-            </span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function MiniBoardDisplay({
-  state,
-  viewFromBottom,
-  accentPit,
-}: {
-  state: GameState
-  viewFromBottom: boolean
-  accentPit?: number | null
-}) {
-  const board = state.board
-
-  const topPits = viewFromBottom ? [12, 11, 10, 9, 8, 7] : [5, 4, 3, 2, 1, 0]
-  const botPits = viewFromBottom ? [0, 1, 2, 3, 4, 5] : [7, 8, 9, 10, 11, 12]
-  const leftStore = viewFromBottom ? 13 : 6
-  const rightStore = viewFromBottom ? 6 : 13
-
-  const renderPit = (idx: number) => {
-    const isAccent = accentPit === idx
-    return (
-      <div
-        key={idx}
-        className={
-          'relative w-8 h-8 rounded-md border flex items-center justify-center text-[10px] font-bold ' +
-          (isAccent ? 'border-accent ring-1 ring-accent bg-pit' : 'border-board/40 bg-pit/60')
-        }
-      >
-        {board[idx]}
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col md:flex-row items-center gap-1.5">
-      <div className="flex items-center justify-center bg-pit/40 rounded-lg px-2 py-1 min-w-[3rem]">
-        <span className="text-xs font-bold">{board[leftStore]}</span>
-      </div>
-      <div className="flex flex-col gap-1">
-        <div className="flex gap-1">{topPits.map(renderPit)}</div>
-        <div className="flex gap-1">{botPits.map(renderPit)}</div>
-      </div>
-      <div className="flex items-center justify-center bg-pit/40 rounded-lg px-2 py-1 min-w-[3rem]">
-        <span className="text-xs font-bold">{board[rightStore]}</span>
-      </div>
-    </div>
-  )
-}
-
 export function ReviewScreen() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -420,6 +114,7 @@ export function ReviewScreen() {
 
   const updateAnalysisInHistory = useHistoryStore((s) => s.updateAnalysis)
   const animationSpeed = useSettingsStore((s) => s.animationSpeed)
+  const showPitCounts = useSettingsStore((s) => s.showPitCounts)
 
   const [analyzing, setAnalyzing] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
@@ -552,7 +247,6 @@ export function ReviewScreen() {
     }
   }, [])
 
-  // Reset PV playback when switching to a different row
   useEffect(() => {
     if (pvIndexAtStart.current !== null && pvIndexAtStart.current !== currentIndex) {
       if (pvTimerRef.current) clearInterval(pvTimerRef.current)
@@ -642,7 +336,6 @@ export function ReviewScreen() {
     setPvStep(step)
   }, [])
 
-  // Playback scrubber
   const togglePlayback = useCallback(() => {
     setPlaying((prev) => !prev)
   }, [])
@@ -717,7 +410,6 @@ export function ReviewScreen() {
         ? currentEntry.bestPitIndex
         : null
 
-  // Handle shared game
   const isShared = locationState?.shared === true
 
   const handlePlayFromHere = useCallback(() => {
@@ -744,6 +436,34 @@ export function ReviewScreen() {
     setTimeout(() => setShareStatus(null), 3000)
   }, [gameState])
 
+  const graphPoints = useMemo((): EvalGraphPoint[] => {
+    if (!cache) return []
+    const pts: EvalGraphPoint[] = []
+    for (let i = 0; i < positions.length - 1; i++) {
+      const pos = positions[i]
+      if (!pos || !pos.move) continue
+      const entry = cache[i]
+      if (!entry || entry.bestPitIndex < 0) continue
+      let clampedEval = Math.max(-15, Math.min(15, entry.bestEval))
+      if (playerSide && pos.player !== playerSide) {
+        clampedEval = -clampedEval
+      }
+      pts.push({
+        index: i,
+        eval: clampedEval,
+        moveNumber: i + 1,
+      })
+    }
+    return pts
+  }, [cache, positions, playerSide])
+
+  const graphTopLabel = playerSide
+    ? playerNameShort(playerSide, savedMeta)
+    : strings.game.player1
+  const graphBottomLabel = playerSide
+    ? playerNameShort(playerSide === 'bottom' ? 'top' : 'bottom', savedMeta)
+    : strings.game.player2
+
   if (!gameState && !localCache) {
     if (!useGameStore.getState().gameState) {
       return <Navigate to="/home" replace />
@@ -754,18 +474,18 @@ export function ReviewScreen() {
   const maxIndex = positions.length - 1
 
   return (
-    <div className="min-h-screen p-3 md:p-4 flex flex-col items-center gap-4 max-w-2xl mx-auto">
+    <div className="min-h-screen p-3 md:p-4 max-w-[1240px] mx-auto">
       {shareStatus && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-accent text-bg text-sm px-4 py-2 rounded-lg shadow-lg">
           {shareStatus}
         </div>
       )}
 
-      <div className="flex items-center justify-between w-full">
+      <div className="flex items-center justify-between w-full mb-4">
         <h1 className="text-display-md font-display font-semibold text-text">
           {isShared ? strings.shared.readOnlyReview : strings.review.title}
         </h1>
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           {isShared && currentPos && (
             <button
               type="button"
@@ -786,7 +506,7 @@ export function ReviewScreen() {
       </div>
 
       {analyzing && (
-        <div className="flex flex-col items-center gap-2 py-8">
+        <div className="flex flex-col items-center gap-2 py-12">
           <p className="text-muted text-sm">{strings.review.analyzing}</p>
           <div className="w-48 h-2 bg-board/40 rounded-full overflow-hidden">
             <motion.div
@@ -805,170 +525,288 @@ export function ReviewScreen() {
       )}
 
       {!analyzing && cache && (
-        <>
-          <div className="w-full">
-            <p className="text-xs text-muted mb-1">{strings.review.evalGraph}</p>
-            <EvalGraph
-              positions={positions}
-              cache={cache}
-              savedMeta={savedMeta}
-              currentIndex={currentIndex}
-              onSelectIndex={setCurrentIndex}
-            />
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:gap-x-8 flex flex-col gap-5">
+          {/* RIGHT column: Graph + Move List (rendered first in DOM for mobile stacking) */}
+          <div className="lg:sticky lg:top-4 flex flex-col gap-4 lg:max-h-[calc(100vh-2rem)] order-first lg:order-none">
+            <div>
+              <p className="text-label text-muted mb-2">{strings.review.evalGraph}</p>
+              <EvalGraph
+                points={graphPoints}
+                currentIndex={currentIndex}
+                onSelectIndex={(idx) => {
+                  setCurrentIndex(idx)
+                  setPlaying(false)
+                }}
+                height={280}
+                topLabel={graphTopLabel}
+                bottomLabel={graphBottomLabel}
+              />
+            </div>
+
+            <div className="flex-1 min-h-0 flex flex-col">
+              <p className="text-label text-muted mb-2 shrink-0">{strings.review.moveList}</p>
+              <div className="flex-1 min-h-0 overflow-y-auto rounded-lg border border-border/40 bg-surface/30">
+                <MoveListPanel
+                  positions={positions}
+                  cache={cache}
+                  currentIndex={currentIndex}
+                  onSelect={(idx) => {
+                    setCurrentIndex(idx)
+                    setPlaying(false)
+                  }}
+                  savedMeta={savedMeta}
+                />
+              </div>
+            </div>
           </div>
 
-          {displayState && (
-            <div className="flex flex-col items-center gap-2 w-full">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentIndex((prev) => Math.max(0, prev - 1))
-                    setPlaying(false)
-                  }}
-                  disabled={currentIndex === 0}
-                  className="text-accent disabled:opacity-30 text-lg"
-                  aria-label="Previous move"
-                >
-                  &#9664;
-                </button>
-                <MiniBoardDisplay
-                  state={displayState}
-                  viewFromBottom={viewFromBottom}
-                  accentPit={accentPitForDisplay}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentIndex((prev) => Math.min(maxIndex, prev + 1))
-                    setPlaying(false)
-                  }}
-                  disabled={currentIndex >= maxIndex}
-                  className="text-accent disabled:opacity-30 text-lg"
-                  aria-label="Next move"
-                >
-                  &#9654;
-                </button>
-              </div>
+          {/* LEFT column: Board + Controls */}
+          <div className="flex flex-col items-center gap-4">
+            {displayState && (
+              <Board
+                gameState={displayState}
+                viewFromBottom={viewFromBottom}
+                clickablePits={[]}
+                onPitClick={() => {}}
+                pendingMove={null}
+                prevBoard={null}
+                effectiveSpeed={0}
+                onAnimationComplete={() => {}}
+                showPitCounts={showPitCounts}
+                accentPit={accentPitForDisplay}
+                className="max-w-none"
+              />
+            )}
 
-              {/* Scrubber bar */}
-              <div className="flex items-center gap-2 w-full max-w-xs">
-                <button
-                  type="button"
-                  onClick={togglePlayback}
-                  disabled={maxIndex <= 0}
-                  className="text-accent disabled:opacity-30 text-sm font-medium w-12"
-                  aria-label={playing ? 'Pause playback' : 'Play moves'}
-                >
-                  {playing ? '\u23F8' : '\u25B6'}
-                </button>
-                <input
-                  type="range"
-                  min={0}
-                  max={maxIndex}
-                  value={currentIndex}
-                  onChange={handleScrub}
-                  className="flex-1 accent-accent h-1"
-                />
-                <span className="text-xs text-muted w-10 text-right font-mono">
-                  {currentIndex}/{maxIndex}
-                </span>
-              </div>
+            {/* Scrubber bar */}
+            <div className="flex items-center gap-2 w-full max-w-md">
+              <button
+                type="button"
+                onClick={togglePlayback}
+                disabled={maxIndex <= 0}
+                className="text-accent disabled:opacity-30 text-sm font-medium w-10 shrink-0"
+                aria-label={playing ? strings.review.pause : strings.review.play}
+              >
+                {playing ? '\u23F8' : '\u25B6'}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={maxIndex}
+                value={currentIndex}
+                onChange={handleScrub}
+                className="flex-1 accent-accent h-1 cursor-pointer"
+              />
+              <span className="text-xs text-muted w-14 text-right font-mono shrink-0">
+                {Math.min(currentIndex + 1, maxIndex)} / {maxIndex}
+              </span>
+            </div>
 
-              <div className="text-xs text-muted text-center">
-                {currentPos?.move ? `${playerLabel(currentPos, savedMeta)}` : 'Start'}
-                {currentPos?.move && (
-                  <span className="ml-1 text-text font-mono">
+            {/* Prev/Next row */}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentIndex((prev) => Math.max(0, prev - 1))
+                  setPlaying(false)
+                }}
+                disabled={currentIndex === 0}
+                className="text-accent disabled:opacity-30 text-lg px-2 py-1 hover:bg-accent/10 rounded-lg transition-colors"
+                aria-label="Previous move"
+              >
+                &#9664;
+              </button>
+              <span className="text-xs text-muted min-w-[60px] text-center">
+                {currentPos?.move
+                  ? `${playerLabel(currentPos, savedMeta)}`
+                  : 'Start'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentIndex((prev) => Math.min(maxIndex, prev + 1))
+                  setPlaying(false)
+                }}
+                disabled={currentIndex >= maxIndex}
+                className="text-accent disabled:opacity-30 text-lg px-2 py-1 hover:bg-accent/10 rounded-lg transition-colors"
+                aria-label="Next move"
+              >
+                &#9654;
+              </button>
+            </div>
+
+            {/* Move context */}
+            <div className="text-xs text-muted text-center flex flex-col gap-1 min-h-[1.5em]">
+              {currentPos?.move && (
+                <span>
+                  <span className="text-text font-mono font-bold">
                     {notatePit(currentPos.move!.pitIndex)}
                   </span>
-                )}
-              </div>
+                </span>
+              )}
 
               {playedMoveNotBest && !showPV && currentEntry && (
-                <div className="text-xs text-muted">
-                  {strings.review.recommended}:{' '}
-                  <span className="text-accent font-mono">
-                    {notatePit(currentEntry.bestPitIndex)}
+                <>
+                  <span>
+                    {strings.review.recommended}:{' '}
+                    <span className="text-accent font-mono font-bold">
+                      {notatePit(currentEntry.bestPitIndex)}
+                    </span>
                   </span>
-                </div>
-              )}
-
-              {playedMoveNotBest && !showPV && isHumanTurn && (
-                <button
-                  type="button"
-                  onClick={handlePVPlayback}
-                  className="text-xs text-accent hover:underline mt-1"
-                >
-                  {strings.review.seeWhatHappened}
-                </button>
-              )}
-
-              {showPV && (
-                <motion.div
-                  initial={{ opacity: 0, y: 2 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-xs text-accent font-medium"
-                >
-                  {strings.review.recommended}
-                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 justify-center mt-1">
-                    {pvMovesWithPlayers.map((m, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => {
-                          handlePVChipClick(i)
-                        }}
-                        className={
-                          'inline-flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-colors ' +
-                          (i === pvStep
-                            ? 'bg-accent/20 text-accent ring-1 ring-accent/50'
-                            : 'text-muted hover:bg-board/40')
-                        }
-                      >
-                        <span className="text-[10px] opacity-70">
-                          {playerNameShort(m.player, savedMeta)}
-                        </span>
-                        <span className="font-mono font-bold">{notatePit(m.pit)}</span>
-                      </button>
-                    ))}
-                  </div>
-                  {pvStep < pvStates.length - 1 && (
-                    <p className="text-[10px] text-muted/50 mt-1">
-                      Animating &middot; click any chip to scrub &middot; press
-                      &ldquo;See&hellip;&rdquo; again to restart
-                    </p>
+                  {currentEntry.playedEval < currentEntry.bestEval - 0.01 && (
+                    <span
+                      className="text-[11px] font-medium"
+                      style={{ color: classificationColors[classifyEvalDrop(currentEntry.bestEval - currentEntry.playedEval)] }}
+                    >
+                      {(currentEntry.playedEval - currentEntry.bestEval).toFixed(1)}
+                    </span>
                   )}
-                  {pvStep >= pvStates.length - 1 && (
-                    <p className="text-[10px] text-muted/50 mt-1">
-                      Variation complete &middot; click any chip to review &middot; press
-                      &ldquo;See&hellip;&rdquo; to restart
-                    </p>
-                  )}
-                </motion.div>
+                </>
               )}
             </div>
-          )}
 
-          <div className="w-full">
-            <p className="text-xs text-muted mb-2">{strings.review.moveList}</p>
-            <MoveListPanel
-              positions={positions}
-              cache={cache}
-              currentIndex={currentIndex}
-              onSelect={(idx) => {
-                setCurrentIndex(idx)
-                setPlaying(false)
-              }}
-              savedMeta={savedMeta}
-            />
+            {/* PV section */}
+            {playedMoveNotBest && !showPV && isHumanTurn && (
+              <button
+                type="button"
+                onClick={handlePVPlayback}
+                className="text-xs text-accent hover:underline"
+              >
+                {strings.review.seeWhatHappened}
+              </button>
+            )}
+
+            {showPV && (
+              <motion.div
+                initial={{ opacity: 0, y: 2 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xs text-accent font-medium"
+              >
+                {strings.review.recommended}
+                <div className="flex flex-wrap gap-x-2 gap-y-0.5 justify-center mt-1">
+                  {pvMovesWithPlayers.map((m, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        handlePVChipClick(i)
+                      }}
+                      className={
+                        'inline-flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-colors ' +
+                        (i === pvStep
+                          ? 'bg-accent/20 text-accent ring-1 ring-accent/50'
+                          : 'text-muted hover:bg-board/40')
+                      }
+                    >
+                      <span className="text-[10px] opacity-70">
+                        {playerNameShort(m.player, savedMeta)}
+                      </span>
+                      <span className="font-mono font-bold">{notatePit(m.pit)}</span>
+                    </button>
+                  ))}
+                </div>
+                {pvStep < pvStates.length - 1 && (
+                  <p className="text-[10px] text-muted/50 mt-1">
+                    Animating &middot; click any chip to scrub &middot; press
+                    &ldquo;See&hellip;&rdquo; again to restart
+                  </p>
+                )}
+                {pvStep >= pvStates.length - 1 && (
+                  <p className="text-[10px] text-muted/50 mt-1">
+                    Variation complete &middot; click any chip to review &middot; press
+                    &ldquo;See&hellip;&rdquo; to restart
+                  </p>
+                )}
+              </motion.div>
+            )}
+
+            <p className="text-[10px] text-muted/50 mt-2 text-center">
+              &larr; &rarr; to scrub &middot; Space to play/pause &middot; Click move or graph to jump
+            </p>
           </div>
-
-          <p className="text-[10px] text-muted/50 mt-2">
-            &larr; &rarr; keys to scrub &middot; Space to play/pause &middot; Click a move to jump
-            &middot; Click graph point to navigate
-          </p>
-        </>
+        </div>
       )}
+    </div>
+  )
+}
+
+function MoveListPanel({
+  positions,
+  cache,
+  currentIndex,
+  onSelect,
+  savedMeta,
+}: {
+  positions: PositionInfo[]
+  cache: AnalysisCacheEntry[]
+  currentIndex: number
+  onSelect: (index: number) => void
+  savedMeta: SavedMeta | null
+}) {
+  const movePositions = positions.filter((p) => p.move)
+
+  return (
+    <div className="flex flex-col">
+      {movePositions.map((pos) => {
+        const entry = cache[pos.index]
+        if (!entry) return null
+
+        const playedMove = pos.move!
+        const index = pos.index
+        const isBest = playedMove.pitIndex === entry.bestPitIndex
+        const evalDrop = isBest ? 0 : Math.max(0, entry.bestEval - entry.playedEval)
+        const cls = isBest ? 'best' : classifyEvalDrop(evalDrop)
+        const color = classificationColors[cls]
+
+        const playedNotation = notatePit(playedMove.pitIndex)
+        const bestNotation = notatePit(entry.bestPitIndex)
+        const humanRow = isHumanPos(pos, savedMeta)
+        const isBotMode = savedMeta?.mode === 'vs-bot'
+
+        return (
+          <button
+            key={index}
+            type="button"
+            onClick={() => onSelect(index)}
+            className={
+              'flex items-center justify-between gap-2 px-3 py-2 text-sm transition-colors border-b border-border/20 last:border-b-0 ' +
+              (currentIndex === index
+                ? 'bg-accent/12 text-text'
+                : 'hover:bg-board/20 text-text')
+            }
+          >
+            {/* Left part */}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-muted w-6 text-left text-xs font-mono shrink-0">
+                {index + 1}
+              </span>
+              {isBotMode && (
+                <span className="text-muted/50 w-4 text-center text-[10px] shrink-0">
+                  {humanRow ? 'Y' : 'B'}
+                </span>
+              )}
+              <span className="font-mono font-bold">{playedNotation}</span>
+              {!isBest && playedNotation !== bestNotation && (
+                <span className="text-muted text-[11px] ml-0.5">
+                  &rarr; {bestNotation}
+                </span>
+              )}
+            </div>
+
+            {/* Right part */}
+            <div className="flex items-center gap-2 shrink-0">
+              {!isBest && evalDrop > 0.01 && (
+                <span className="text-[11px] font-medium tabular-nums" style={{ color }}>
+                  {`-${evalDrop.toFixed(1)}`}
+                </span>
+              )}
+              <Chip color={color} className="text-[10px] px-1.5 py-0.5">
+                {classificationLabel[cls]}
+              </Chip>
+            </div>
+          </button>
+        )
+      })}
     </div>
   )
 }
