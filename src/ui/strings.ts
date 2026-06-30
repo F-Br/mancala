@@ -60,8 +60,6 @@ export const strings = {
     warmEarth: 'Warm Earth',
     darkMuseum: 'Dark Museum',
     modernDesert: 'Modern Desert',
-    boardFlip: 'Board Flip',
-    boardFlipDesc: 'Rotate board for each player',
     sound: 'Sound',
     haptics: 'Haptics',
     animationSpeed: 'Animation Speed',

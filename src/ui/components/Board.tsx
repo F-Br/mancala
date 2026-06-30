@@ -68,7 +68,6 @@ function getOrganicPositions(
 interface StoneClusterProps {
   count: number
   pitIndex: number
-  mirror: boolean
   isStore: boolean
   showPitCounts: boolean
 }
@@ -78,7 +77,6 @@ const MAX_VISIBLE_STONES = 12
 function StoneCluster({
   count,
   pitIndex,
-  mirror,
   isStore,
   showPitCounts,
 }: StoneClusterProps) {
@@ -90,7 +88,6 @@ function StoneCluster({
           'font-display font-semibold text-display-md md:text-display-lg ' +
           'drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)] text-stone pointer-events-none'
         }
-        style={mirror ? { transform: 'rotate(180deg)' } : undefined}
       >
         {count}
       </span>
@@ -107,21 +104,17 @@ function StoneCluster({
 
   return (
     <>
-      {positions.map((pos, i) => {
-        const x = mirror ? 1 - pos.x : pos.x
-        const y = mirror ? 1 - pos.y : pos.y
-        return (
-          <span
-            key={i}
-            className="absolute stone-3d w-[9px] h-[9px] md:w-[10px] md:h-[10px]"
-            style={{
-              left: `${x * 100}%`,
-              top: `${y * 100}%`,
-              transform: 'translate(-50%, -50%)',
-            }}
-          />
-        )
-      })}
+      {positions.map((pos, i) => (
+        <span
+          key={i}
+          className="absolute stone-3d w-[9px] h-[9px] md:w-[10px] md:h-[10px]"
+          style={{
+            left: `${pos.x * 100}%`,
+            top: `${pos.y * 100}%`,
+            transform: 'translate(-50%, -50%)',
+          }}
+        />
+      ))}
 
       {overflow && (
         <div className="absolute bottom-1 left-1/2 -translate-x-1/2 z-10">
@@ -135,7 +128,6 @@ function StoneCluster({
             'absolute bottom-1 right-1.5 z-10 pointer-events-none ' +
             'font-body text-label font-semibold text-muted'
           }
-          style={mirror ? { transform: 'rotate(180deg)' } : undefined}
         >
           {count}
         </span>
@@ -327,8 +319,6 @@ function BoardInner({
     return () => clearTimeout(t)
   }, [animPhase, onAnimationComplete])
 
-  const mirrored = !viewFromBottom
-
   const pitAriaLabel = (pitIndex: number) => {
     const count = displayBoard[pitIndex]!
     const bottomPits = viewFromBottom ? [0, 1, 2, 3, 4, 5] : [7, 8, 9, 10, 11, 12]
@@ -362,7 +352,6 @@ function BoardInner({
           <StoneCluster
             count={count}
             pitIndex={pitIndex}
-            mirror={mirrored}
             isStore={false}
             showPitCounts={showPitCounts}
           />
@@ -375,7 +364,6 @@ function BoardInner({
       displayBoard,
       onPitClick,
       showPitCounts,
-      mirrored,
       accentPit,
     ],
   )
@@ -393,7 +381,6 @@ function BoardInner({
       <StoneCluster
         count={displayBoard[storeIndex]!}
         pitIndex={100 + storeIndex}
-        mirror={mirrored}
         isStore
         showPitCounts={showPitCounts}
       />

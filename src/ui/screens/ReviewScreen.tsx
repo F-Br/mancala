@@ -419,7 +419,6 @@ export function ReviewScreen() {
   const setAnalysisCache = useGameStore((s) => s.setAnalysisCache)
 
   const updateAnalysisInHistory = useHistoryStore((s) => s.updateAnalysis)
-  const boardFlip = useSettingsStore((s) => s.boardFlip)
   const animationSpeed = useSettingsStore((s) => s.animationSpeed)
 
   const [analyzing, setAnalyzing] = useState(false)
@@ -707,9 +706,7 @@ export function ReviewScreen() {
   const viewFromBottom =
     savedMeta?.mode === 'vs-bot'
       ? playerSide === 'bottom'
-      : boardFlip
-        ? currentPos?.player === 'bottom'
-        : true
+      : true
 
   const displayState = showPV && pvStates[pvStep] ? pvStates[pvStep] : (currentPos?.state ?? null)
 

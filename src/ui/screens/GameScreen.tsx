@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { legalMoves, gameToText } from '../../engine'
 import type { GameState as EngineGameState, Move, Side } from '../../engine'
 import { requestBotMove, terminateBotWorker } from '../../bots/client'
@@ -115,7 +115,6 @@ export function GameScreen() {
 
   const addRecord = useHistoryStore((s) => s.addRecord)
 
-  const boardFlip = useSettingsStore((s) => s.boardFlip)
   const animationSpeed = useSettingsStore((s) => s.animationSpeed)
   const soundEnabled = useSettingsStore((s) => s.soundEnabled)
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled)
@@ -129,7 +128,6 @@ export function GameScreen() {
   const [pendingMove, setPendingMove] = useState<Move | null>(null)
   const [prevBoard, setPrevBoard] = useState<number[] | null>(null)
   const [boardLocked, setBoardLocked] = useState(false)
-  const [displayViewFromBottom, setDisplayViewFromBottom] = useState(true)
   const [displayCurrentPlayer, setDisplayCurrentPlayer] = useState<Side>('bottom')
   const [pitCountsVisible, setPitCountsVisible] = useState(false)
 
@@ -153,12 +151,6 @@ export function GameScreen() {
   const isVsBot = mode === 'vs-bot'
 
   const humanSide: Side | null = isVsBot ? (playerSide === 'random' ? 'bottom' : playerSide) : null
-
-  const nextViewFromBottom = isVsBot
-    ? humanSide === 'bottom'
-    : boardFlip
-      ? gameState?.currentPlayer === 'bottom'
-      : true
 
   const clickablePits = useMemo(() => {
     if (!gameState || gameState.status !== 'in-progress') return []
@@ -274,10 +266,6 @@ export function GameScreen() {
 
     setDisplayCurrentPlayer(newState.currentPlayer)
 
-    if (!isVsBot && boardFlip) {
-      setDisplayViewFromBottom(newState.currentPlayer === 'bottom')
-    }
-
     if (newState.status === 'finished') {
       if (soundEnabled) {
         if (newState.winner === 'draw') playGameEndDraw()
@@ -291,7 +279,7 @@ export function GameScreen() {
     if (isVsBot && newState.currentPlayer !== humanSide) {
       doBotMove(newState)
     }
-  }, [isVsBot, humanSide, doBotMove, boardFlip, soundEnabled, hapticsEnabled])
+  }, [isVsBot, humanSide, doBotMove, soundEnabled, hapticsEnabled])
 
   const saveToHistory = useCallback(() => {
     if (savedToHistoryRef.current) return
@@ -461,12 +449,6 @@ export function GameScreen() {
   }, [mode, botLevel, playerSide, reset, setSavedMeta])
 
   useEffect(() => {
-    if (isVsBot || !boardFlip) {
-      setDisplayViewFromBottom(nextViewFromBottom)
-    }
-  }, [isVsBot, boardFlip, nextViewFromBottom])
-
-  useEffect(() => {
     if (!gameState || !isVsBot || boardLocked) return
     if (gameState.status !== 'in-progress') return
     if (gameState.currentPlayer === humanSide) return
@@ -520,7 +502,7 @@ export function GameScreen() {
 
       if (e.key >= '1' && e.key <= '6') {
         const idx = parseInt(e.key, 10) - 1
-        const row = displayViewFromBottom ? [0, 1, 2, 3, 4, 5] : [7, 8, 9, 10, 11, 12]
+        const row = [0, 1, 2, 3, 4, 5]
         if (idx >= 0 && idx < row.length) {
           const pitIndex = row[idx]!
           if (clickablePits.includes(pitIndex)) {
@@ -548,7 +530,6 @@ export function GameScreen() {
       thinking,
       isVsBot,
       humanSide,
-      displayViewFromBottom,
       clickablePits,
       selectedPit,
       handlePitClick,
@@ -568,10 +549,6 @@ export function GameScreen() {
 
   if (!mode && !gameState) return <Navigate to="/home" replace />
   if (!gameState) return null
-
-  const currentPlayerLabel = displayCurrentPlayer === 'bottom' ? bottomLabel : topLabel
-
-  const boardKey = displayViewFromBottom ? 'normal' : 'flipped'
 
   const accentPit = selectedPit ?? oneShotHintPit ?? liveHintPit
   const isHumanTurn =
@@ -616,7 +593,6 @@ export function GameScreen() {
         bottomScore={gameState.board[6]!}
         topScore={gameState.board[13]!}
         currentPlayer={displayCurrentPlayer}
-        viewFromBottom={displayViewFromBottom}
       />
 
       <div className="h-6 flex items-center justify-center">
@@ -629,13 +605,6 @@ export function GameScreen() {
       </div>
 
       <div className="h-6 flex items-center justify-center gap-3">
-        {!isVsBot &&
-          boardFlip &&
-          displayCurrentPlayer === (displayViewFromBottom ? 'bottom' : 'top') && (
-            <span className="text-accent text-sm font-medium">
-              {strings.game.passTo} {currentPlayerLabel}
-            </span>
-          )}
         {isHumanTurn && (
           <button
             type="button"
@@ -656,32 +625,23 @@ export function GameScreen() {
         )}
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={boardKey}
-          initial={{ rotate: 90, opacity: 0 }}
-          animate={{ rotate: 0, opacity: 1 }}
-          exit={{ rotate: -90, opacity: 0 }}
-          transition={{ duration: 0.35, ease: 'easeInOut' }}
-          className="w-full"
-        >
-          <Board
-            gameState={gameState}
-            viewFromBottom={displayViewFromBottom}
-            clickablePits={clickablePits}
-            onPitClick={handlePitClick}
-            pendingMove={pendingMove}
-            prevBoard={prevBoard}
-            effectiveSpeed={effectiveSpeed}
-            onAnimationComplete={handleAnimationComplete}
-            onStoneLanded={handleStoneLanded}
-            onCapture={handleCaptureEvent}
-            onExtraTurn={handleExtraTurnEvent}
-            showPitCounts={showPitCounts || pitCountsVisible}
-            accentPit={accentPit}
-          />
-        </motion.div>
-      </AnimatePresence>
+      <div className="w-full">
+        <Board
+          gameState={gameState}
+          viewFromBottom={true}
+          clickablePits={clickablePits}
+          onPitClick={handlePitClick}
+          pendingMove={pendingMove}
+          prevBoard={prevBoard}
+          effectiveSpeed={effectiveSpeed}
+          onAnimationComplete={handleAnimationComplete}
+          onStoneLanded={handleStoneLanded}
+          onCapture={handleCaptureEvent}
+          onExtraTurn={handleExtraTurnEvent}
+          showPitCounts={showPitCounts || pitCountsVisible}
+          accentPit={accentPit}
+        />
+      </div>
 
       <div className="h-8 flex items-center justify-center">
         <LiveAnalysisPanel

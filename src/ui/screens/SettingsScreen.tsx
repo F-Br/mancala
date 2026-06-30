@@ -43,13 +43,6 @@ export function SettingsScreen() {
         </Section>
 
         <ToggleRow
-          label={strings.settings.boardFlip}
-          description={strings.settings.boardFlipDesc}
-          checked={settings.boardFlip}
-          onChange={settings.setBoardFlip}
-        />
-
-        <ToggleRow
           label={strings.settings.sound}
           checked={settings.soundEnabled}
           onChange={settings.setSoundEnabled}

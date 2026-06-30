@@ -7,7 +7,6 @@ interface ScorePanelProps {
   bottomScore: number
   topScore: number
   currentPlayer: Side
-  viewFromBottom: boolean
 }
 
 export function ScorePanel({
@@ -16,14 +15,8 @@ export function ScorePanel({
   bottomScore,
   topScore,
   currentPlayer,
-  viewFromBottom,
 }: ScorePanelProps) {
-  const displayLabel = viewFromBottom ? bottomLabel : topLabel
-  const displayScore = viewFromBottom ? bottomScore : topScore
-  const oppLabel = viewFromBottom ? topLabel : bottomLabel
-  const oppScore = viewFromBottom ? topScore : bottomScore
-
-  const isDisplayActive = currentPlayer === (viewFromBottom ? 'bottom' : 'top')
+  const isDisplayActive = currentPlayer === 'bottom'
 
   return (
     <div className="flex items-center justify-between w-full max-w-xl mx-auto mb-2">
@@ -37,12 +30,12 @@ export function ScorePanel({
           (isDisplayActive ? 'bg-accent/20 text-accent' : 'text-muted')
         }
       >
-        <span className="text-sm font-medium">{displayLabel}</span>
-        <span className="text-2xl font-bold">{displayScore}</span>
+        <span className="text-sm font-medium">{bottomLabel}</span>
+        <span className="text-2xl font-bold">{bottomScore}</span>
       </motion.div>
 
       <div className="text-xs text-muted px-2">
-        {currentPlayer === (viewFromBottom ? 'bottom' : 'top') ? '\u25B6' : '\u25C0'}
+        {currentPlayer === 'bottom' ? '\u25B6' : '\u25C0'}
       </div>
 
       <motion.div
@@ -57,8 +50,8 @@ export function ScorePanel({
           (!isDisplayActive ? 'bg-accent/20 text-accent' : 'text-muted')
         }
       >
-        <span className="text-sm font-medium">{oppLabel}</span>
-        <span className="text-2xl font-bold">{oppScore}</span>
+        <span className="text-sm font-medium">{topLabel}</span>
+        <span className="text-2xl font-bold">{topScore}</span>
       </motion.div>
     </div>
   )

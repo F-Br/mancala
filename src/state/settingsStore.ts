@@ -5,7 +5,6 @@ import { defaultThemeKey } from '../ui/theme'
 
 export interface SettingsState {
   theme: ThemeKey
-  boardFlip: boolean
   soundEnabled: boolean
   hapticsEnabled: boolean
   animationSpeed: number
@@ -13,7 +12,6 @@ export interface SettingsState {
   tutorialSeen: boolean
   showPitCounts: boolean
   setTheme: (key: ThemeKey) => void
-  setBoardFlip: (v: boolean) => void
   setSoundEnabled: (v: boolean) => void
   setHapticsEnabled: (v: boolean) => void
   setAnimationSpeed: (v: number) => void
@@ -25,7 +23,6 @@ export interface SettingsState {
 
 const defaults = {
   theme: defaultThemeKey as ThemeKey,
-  boardFlip: false,
   soundEnabled: true,
   hapticsEnabled: true,
   animationSpeed: 1,
@@ -39,7 +36,6 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       ...defaults,
       setTheme: (theme) => set({ theme }),
-      setBoardFlip: (boardFlip) => set({ boardFlip }),
       setSoundEnabled: (soundEnabled) => set({ soundEnabled }),
       setHapticsEnabled: (hapticsEnabled) => set({ hapticsEnabled }),
       setAnimationSpeed: (animationSpeed) => set({ animationSpeed }),
@@ -50,6 +46,27 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'mancala-settings',
+      partialize: (state) => {
+        const allowed: (keyof SettingsState)[] = [
+          'theme', 'soundEnabled', 'hapticsEnabled', 'animationSpeed',
+          'liveHintsEnabled', 'tutorialSeen', 'showPitCounts',
+        ]
+        const result: Record<string, unknown> = {}
+        for (const key of allowed) {
+          result[key] = state[key]
+        }
+        return result
+      },
+      merge: (persisted, current) => ({
+        ...current,
+        ...(typeof persisted === 'object' && persisted
+          ? Object.fromEntries(
+              Object.entries(persisted as Record<string, unknown>).filter(
+                ([key]) => key in current,
+              ),
+            )
+          : {}),
+      }),
       skipHydration: false,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('Failed to load settings from localStorage:', error)
