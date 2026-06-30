@@ -9,10 +9,11 @@ import {
   pickMoveExpert,
   TranspositionTable,
   iterativeDeepening,
+  extractPrincipalVariation,
 } from '../search'
 import type { CancelSignal } from '../search'
 import { evaluateSimple, WIN_SCORE, MAX_PLY } from '../evaluation'
-import { createInitialState, applyMove, legalMoves } from '../../engine'
+import { createInitialState, applyMove, legalMoves, cloneState } from '../../engine'
 import { BOTTOM_STORE, TOP_STORE } from '../../engine'
 import type { GameState, RuleConfig } from '../../engine'
 
@@ -627,5 +628,141 @@ describe('mate-distance scoring', () => {
     expect(result.pv.length).toBeGreaterThan(0)
     // Score should be negative (bottom is losing)
     expect(result.score).toBeLessThan(0)
+  })
+})
+
+describe('extractPrincipalVariation', () => {
+  it('from a near-end position, reaches a terminal state with all moves legal in sequence', () => {
+    // Position 2-3 moves from the end: bottom has 1 stone in pit 0,
+    // top has 2 stones in pit 7. After bottom's move, top replies,
+    // then one side becomes empty ending the game.
+    const board = makeBoard([1, 0, 0, 0, 0, 0])
+    board[7] = 2
+    board[BOTTOM_STORE] = 0
+    board[TOP_STORE] = 21
+    const state = makeState({ board, currentPlayer: 'bottom' })
+
+    const tt = new TranspositionTable()
+    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, 200)
+
+    expect(result.pv.length).toBeGreaterThan(0)
+
+    // Apply each move and verify legality
+    let s = cloneState(state)
+    for (const pit of result.pv) {
+      const legal = legalMoves(s, RULES)
+      expect(legal).toContain(pit)
+      s = applyMove(s, pit, RULES)
+    }
+
+    // Final state should be terminal
+    expect(s.status).toBe('finished')
+  })
+
+  it('mid-game position produces PV length > 1 (never collapses to single move)', () => {
+    const state = createInitialState()
+    const tt = new TranspositionTable()
+    // Small per-step budget with a capped plume length to keep test fast
+    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, 50, undefined, 6)
+
+    // From the initial 6×4 Kalah position, the PV should extend well beyond one move
+    expect(result.pv.length).toBeGreaterThan(1)
+  })
+
+  it('applying the extracted PV move-by-move reproduces the reported outcome', () => {
+    // Use a small position that ends after one move
+    const board = makeBoard([1, 0, 0, 0, 0, 0])
+    board[7] = 0
+    board[8] = 0
+    board[9] = 0
+    board[10] = 0
+    board[11] = 0
+    board[12] = 0
+    board[BOTTOM_STORE] = 20
+    board[TOP_STORE] = 24
+    const state = makeState({ board, currentPlayer: 'bottom' })
+
+    const tt = new TranspositionTable()
+
+    // Run analysis on this position
+    const analysis = iterativeDeepening(state, 200, RULES, evaluateSimple, tt)
+    expect(analysis.pv.length).toBeGreaterThan(0)
+
+    // Extract full PV from this position (warm TT)
+    const extracted = extractPrincipalVariation(state, RULES, tt, evaluateSimple, 200)
+    expect(extracted.pv.length).toBeGreaterThan(0)
+
+    // Apply the extracted PV move by move
+    let s = cloneState(state)
+    for (const pit of extracted.pv) {
+      s = applyMove(s, pit, RULES)
+    }
+
+    // If the path reached a terminal state, the outcome should match
+    // what the analysis score sign implies
+    if (s.status === 'finished') {
+      if (analysis.score > 0) {
+        expect(s.winner).toBe(state.currentPlayer)
+      } else if (analysis.score < 0) {
+        expect(s.winner).not.toBe(state.currentPlayer)
+      }
+      // score === 0 implies draw
+    }
+  })
+
+  it('extra-turn chain appears as consecutive same-side moves in the PV', () => {
+    // Position where pit 2 (4 stones) gives an extra turn — bottom plays twice in a row
+    const board = makeBoard([0, 0, 4, 0, 0, 0])
+    board[7] = 1
+    board[BOTTOM_STORE] = 0
+    board[TOP_STORE] = 0
+    const state = makeState({ board, currentPlayer: 'bottom' })
+
+    const tt = new TranspositionTable()
+    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, 300)
+
+    expect(result.pv.length).toBeGreaterThan(1)
+    expect(result.players.length).toBe(result.pv.length)
+
+    // Verify each recorded player matches the side to move before that move
+    let s = cloneState(state)
+    for (let i = 0; i < result.pv.length; i++) {
+      expect(result.players[i]).toBe(s.currentPlayer)
+      s = applyMove(s, result.pv[i]!, RULES)
+    }
+
+    // Consecutive same-side moves should appear (bottom → bottom from extra turn)
+    let foundConsecutive = false
+    for (let i = 1; i < result.players.length; i++) {
+      if (result.players[i] === result.players[i - 1]) {
+        foundConsecutive = true
+        break
+      }
+    }
+    expect(foundConsecutive).toBe(true)
+  })
+
+  it('stops immediately on a terminal input state', () => {
+    const board = makeBoard([0, 0, 0, 0, 0, 0])
+    board[BOTTOM_STORE] = 24
+    board[TOP_STORE] = 24
+    const state = makeState({ board, status: 'finished', winner: 'draw' })
+
+    const tt = new TranspositionTable()
+    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, 200)
+
+    expect(result.pv).toEqual([])
+    expect(result.players).toEqual([])
+  })
+
+  it('honours cancel signal', () => {
+    const state = createInitialState()
+    const tt = new TranspositionTable()
+    const cancel: CancelSignal = { cancelled: true }
+
+    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, 500, cancel)
+
+    expect(result.pv).toEqual([])
+    expect(result.players).toEqual([])
   })
 })

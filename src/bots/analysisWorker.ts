@@ -1,6 +1,6 @@
 import type { GameState, RuleConfig } from '../engine'
 import { KALAH_STANDARD, legalMoves } from '../engine'
-import { minimaxWithABTT, TranspositionTable } from './search'
+import { minimaxWithABTT, TranspositionTable, extractPrincipalVariation } from './search'
 import type { CancelSignal } from './search'
 import { evaluateExpert } from './evaluation'
 import type { AnalysisMessage, AnalysisWorkerMessage, AnalysisRequest } from './types'
@@ -77,6 +77,21 @@ export class AnalysisWorkerHandler {
           }
         }
       }
+
+      if (!cancelSignal.cancelled && bestResult.pv.length > 0) {
+        const extracted = extractPrincipalVariation(
+          state,
+          rules,
+          tt,
+          evalFn,
+          100,
+          cancelSignal,
+        )
+        if (extracted.pv.length > 0) {
+          bestResult = { ...bestResult, pv: extracted.pv }
+        }
+      }
+
       this.postMsg({
         type: 'result',
         pitIndex: bestResult.pv[0] ?? -1,

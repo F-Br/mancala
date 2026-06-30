@@ -1,6 +1,6 @@
 import type { GameState, RuleConfig, Side } from '../engine'
 import { BOTTOM_STORE, TOP_STORE, BOARD_LENGTH } from '../engine'
-import { legalMoves, applyMove } from '../engine'
+import { legalMoves, applyMove, cloneState } from '../engine'
 import type { EvaluationFn } from './evaluation'
 import { evaluateSimple, evaluateStrong, evaluateExpert, WIN_SCORE, MAX_PLY } from './evaluation'
 
@@ -517,6 +517,56 @@ export function pickMoveExpert(
 ): IterativeResult {
   const tt = new TranspositionTable()
   return iterativeDeepening(state, timeBudgetMs, rules, evaluateExpert, tt, cancelSignal)
+}
+
+// ── Principal Variation Extraction via Re-search ─────────────────────────
+
+export const MAX_PV_PLIES = 80
+
+export interface ExtractedPV {
+  pv: number[]
+  players: Side[]
+}
+
+export function extractPrincipalVariation(
+  state: GameState,
+  rules: RuleConfig,
+  tt: TranspositionTable,
+  evalFn: EvaluationFn,
+  perStepBudgetMs: number,
+  cancelSignal?: CancelSignal,
+  maxPlies = MAX_PV_PLIES,
+): ExtractedPV {
+  const pv: number[] = []
+  const players: Side[] = []
+  let current = cloneState(state)
+
+  for (let ply = 0; ply < maxPlies; ply++) {
+    if (cancelSignal?.cancelled) break
+    if (current.status === 'finished') break
+
+    const result = iterativeDeepening(
+      current,
+      perStepBudgetMs,
+      rules,
+      evalFn,
+      tt,
+      cancelSignal,
+      1,
+    )
+
+    if (cancelSignal?.cancelled) break
+
+    const bestMove = result.pv[0]
+    if (bestMove === undefined) break
+
+    pv.push(bestMove)
+    players.push(current.currentPlayer)
+
+    current = applyMove(current, bestMove, rules)
+  }
+
+  return { pv, players }
 }
 
 export { minimax, minimaxWithAB, minimaxWithABTT }
