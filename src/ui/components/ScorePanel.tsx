@@ -1,12 +1,10 @@
-import { motion } from 'framer-motion'
-import type { Side } from '../../engine'
-
 interface ScorePanelProps {
   bottomLabel: string
   topLabel: string
   bottomScore: number
   topScore: number
-  currentPlayer: Side
+  currentPlayer: 'bottom' | 'top'
+  thinking?: boolean
 }
 
 export function ScorePanel({
@@ -15,44 +13,53 @@ export function ScorePanel({
   bottomScore,
   topScore,
   currentPlayer,
+  thinking,
 }: ScorePanelProps) {
-  const isDisplayActive = currentPlayer === 'bottom'
+  const isBottomTurn = currentPlayer === 'bottom'
 
   return (
-    <div className="flex items-center justify-between w-full max-w-xl mx-auto mb-2">
-      <motion.div
-        animate={isDisplayActive ? { scale: [1, 1.05, 1] } : { scale: 1 }}
-        transition={
-          isDisplayActive ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' } : { duration: 0 }
-        }
+    <div className="flex items-center justify-between w-full select-none">
+      <div
         className={
-          'flex flex-col items-center px-4 py-2 rounded-lg ' +
-          (isDisplayActive ? 'bg-accent/20 text-accent' : 'text-muted')
+          'flex flex-col items-center min-w-0 ' +
+          (isBottomTurn ? 'text-accent' : 'text-muted')
         }
       >
-        <span className="text-sm font-medium">{bottomLabel}</span>
-        <span className="text-2xl font-bold">{bottomScore}</span>
-      </motion.div>
-
-      <div className="text-xs text-muted px-2">
-        {currentPlayer === 'bottom' ? '\u25B6' : '\u25C0'}
+        <span className="text-label uppercase tracking-label font-semibold truncate max-w-[80px]">
+          {bottomLabel}
+        </span>
+        <span className="font-display text-display-lg font-bold leading-none">
+          {bottomScore}
+        </span>
       </div>
 
-      <motion.div
-        animate={!isDisplayActive ? { scale: [1, 1.05, 1] } : { scale: 1 }}
-        transition={
-          !isDisplayActive
-            ? { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }
-            : { duration: 0 }
-        }
+      <div className="flex items-center gap-1.5 text-accent shrink-0 px-2">
+        {thinking ? (
+          <span className="flex gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: '0.2s' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" style={{ animationDelay: '0.4s' }} />
+          </span>
+        ) : (
+          <span className="text-lg leading-none">
+            {isBottomTurn ? '\u25B8' : '\u25C2'}
+          </span>
+        )}
+      </div>
+
+      <div
         className={
-          'flex flex-col items-center px-4 py-2 rounded-lg ' +
-          (!isDisplayActive ? 'bg-accent/20 text-accent' : 'text-muted')
+          'flex flex-col items-center min-w-0 ' +
+          (!isBottomTurn ? 'text-accent' : 'text-muted')
         }
       >
-        <span className="text-sm font-medium">{topLabel}</span>
-        <span className="text-2xl font-bold">{topScore}</span>
-      </motion.div>
+        <span className="text-label uppercase tracking-label font-semibold truncate max-w-[80px]">
+          {topLabel}
+        </span>
+        <span className="font-display text-display-lg font-bold leading-none">
+          {topScore}
+        </span>
+      </div>
     </div>
   )
 }

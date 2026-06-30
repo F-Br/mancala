@@ -22,9 +22,12 @@ import {
 } from '../../audio/sounds'
 import { triggerHaptic } from '../../util/haptics'
 import { Board } from '../components/Board'
+import { Button } from '../components/Button'
+import { Card } from '../components/Card'
 import { ScorePanel } from '../components/ScorePanel'
 import { MoveList } from '../components/MoveList'
 import { GameEndOverlay } from '../components/GameEndOverlay'
+import { PageLayout } from '../components/PageLayout'
 import { shareGame } from '../share'
 import { strings } from '../strings'
 
@@ -557,28 +560,26 @@ export function GameScreen() {
     !boardLocked
 
   return (
-    <div className="min-h-screen p-3 md:p-4 flex flex-col items-center gap-3 max-w-4xl mx-auto relative">
-      <div className="flex items-center justify-end w-full max-w-xl mx-auto">
-        <div className="flex items-center gap-3">
-          {!isVsBot && !boardLocked && gameState.status === 'in-progress' && (
-            <button
-              type="button"
-              onClick={() => setPitCountsVisible((v) => !v)}
-              className="text-accent/70 hover:text-accent text-xs"
-            >
-              {pitCountsVisible ? strings.game.hideCounts : strings.game.showCounts}
-            </button>
-          )}
-          {!isVsBot && takebackAllowed && (
-            <button
-              type="button"
-              onClick={handleTakeback}
-              className="text-accent hover:underline text-sm font-medium"
-            >
-              {strings.game.takeback}
-            </button>
-          )}
-        </div>
+    <PageLayout className="relative lg:min-h-[calc(100vh-3rem)] lg:flex lg:flex-col">
+      <div className="flex items-center justify-end w-full gap-3 pb-2">
+        {!isVsBot && !boardLocked && gameState.status === 'in-progress' && (
+          <button
+            type="button"
+            onClick={() => setPitCountsVisible((v) => !v)}
+            className="text-accent/70 hover:text-accent text-xs"
+          >
+            {pitCountsVisible ? strings.game.hideCounts : strings.game.showCounts}
+          </button>
+        )}
+        {!isVsBot && takebackAllowed && (
+          <button
+            type="button"
+            onClick={handleTakeback}
+            className="text-accent hover:underline text-sm font-medium"
+          >
+            {strings.game.takeback}
+          </button>
+        )}
       </div>
 
       {shareStatus && (
@@ -587,45 +588,148 @@ export function GameScreen() {
         </div>
       )}
 
-      <ScorePanel
-        bottomLabel={bottomLabel}
-        topLabel={topLabel}
-        bottomScore={gameState.board[6]!}
-        topScore={gameState.board[13]!}
-        currentPlayer={displayCurrentPlayer}
-      />
+      {/* ─── DESKTOP three-column layout (lg+) ─── */}
+      <div className="hidden lg:grid lg:grid-cols-[180px_1fr_220px] lg:gap-6 lg:items-start lg:flex-1">
+        {/* LEFT panel — player score */}
+        <Card
+          className={
+            'flex flex-col items-center text-center p-0 ' +
+            (displayCurrentPlayer === 'bottom' ? 'border-accent' : '')
+          }
+        >
+          <span className="text-label uppercase tracking-label text-muted font-semibold">
+            {bottomLabel}
+          </span>
+          <span className="font-display text-display-xl font-bold text-text leading-none mt-1">
+            {gameState.board[6]}
+          </span>
+          {displayCurrentPlayer === 'bottom' && (
+            <span className="flex items-center gap-1.5 text-accent text-sm mt-3">
+              <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
+              to move
+            </span>
+          )}
+        </Card>
 
-      <div className="h-6 flex items-center justify-center">
-        {thinking && (
-          <div className="flex items-center gap-2 text-accent text-sm">
-            {strings.game.thinking}
-            <ThinkingDots />
+        {/* CENTER — board + turn indicator */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex items-center gap-2 text-sm text-muted h-6">
+            {thinking ? (
+              <div className="flex items-center gap-2 text-accent">
+                {strings.game.thinking}
+                <ThinkingDots />
+              </div>
+            ) : (
+              <span className="flex items-center gap-1.5">
+                <span className="text-accent text-lg leading-none">
+                  {displayCurrentPlayer === 'bottom' ? '\u25B8' : '\u25C2'}
+                </span>
+                <span>
+                  {displayCurrentPlayer === 'bottom' ? bottomLabel : topLabel} to move
+                </span>
+              </span>
+            )}
+          </div>
+
+          <Board
+            gameState={gameState}
+            viewFromBottom={true}
+            clickablePits={clickablePits}
+            onPitClick={handlePitClick}
+            pendingMove={pendingMove}
+            prevBoard={prevBoard}
+            effectiveSpeed={effectiveSpeed}
+            onAnimationComplete={handleAnimationComplete}
+            onStoneLanded={handleStoneLanded}
+            onCapture={handleCaptureEvent}
+            onExtraTurn={handleExtraTurnEvent}
+            showPitCounts={showPitCounts || pitCountsVisible}
+            accentPit={accentPit}
+            className="lg:max-w-none"
+          />
+
+          <div className="flex items-center gap-3">
+            {isHumanTurn && selectedPit !== null && (
+              <span className="text-[10px] text-muted">
+                Pit {selectedPit + 1} selected &middot; Press Enter to play
+              </span>
+            )}
+          </div>
+
+          <LiveAnalysisPanel
+            evalScore={liveHintEval}
+            pv={liveHintPV}
+            visible={liveHintVisible && liveHintPit !== null}
+          />
+        </div>
+
+        {/* RIGHT panel — opponent score + moves + hint */}
+        <Card
+          className={
+            'flex flex-col p-0 ' +
+            (displayCurrentPlayer === 'top' ? 'border-accent' : '')
+          }
+        >
+          {/* Opponent score */}
+          <div className="text-center mb-4">
+            <span className="text-label uppercase tracking-label text-muted font-semibold">
+              {topLabel}
+            </span>
+            <span className="font-display text-display-xl font-bold text-text leading-none mt-1 block">
+              {gameState.board[13]}
+            </span>
+            {displayCurrentPlayer === 'top' && (
+              <span className="flex items-center justify-center gap-1.5 text-accent text-sm mt-3">
+                <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
+                to move
+              </span>
+            )}
+          </div>
+
+          {/* Moves list */}
+          <div className="flex-1 min-h-0">
+            <h4 className="text-label uppercase tracking-label text-muted font-semibold mb-2">
+              Moves
+            </h4>
+            <div className="max-h-[200px] overflow-y-auto">
+              <MoveList moves={gameState.moveHistory} />
+            </div>
+          </div>
+
+          {/* Hint button */}
+          {isHumanTurn && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleHint}
+              disabled={hintLoading}
+              className="mt-4 w-full"
+            >
+              {hintLoading ? '...' : strings.game.hint}
+            </Button>
+          )}
+        </Card>
+      </div>
+
+      {/* ─── MOBILE / TABLET single-column stack ─── */}
+      <div className="lg:hidden flex flex-col gap-4 w-full">
+        <ScorePanel
+          bottomLabel={bottomLabel}
+          topLabel={topLabel}
+          bottomScore={gameState.board[6]!}
+          topScore={gameState.board[13]!}
+          currentPlayer={displayCurrentPlayer}
+          thinking={thinking}
+        />
+
+        {!thinking && isHumanTurn && selectedPit !== null && (
+          <div className="text-center">
+            <span className="text-[10px] text-muted">
+              Pit {selectedPit + 1} selected &middot; Press Enter to play
+            </span>
           </div>
         )}
-      </div>
 
-      <div className="h-6 flex items-center justify-center gap-3">
-        {isHumanTurn && (
-          <button
-            type="button"
-            onClick={handleHint}
-            disabled={hintLoading}
-            className="text-xs text-accent/70 hover:text-accent disabled:opacity-40 font-medium"
-          >
-            {hintLoading ? '...' : strings.game.hint}
-          </button>
-        )}
-      </div>
-
-      <div className="h-4 flex items-center justify-center">
-        {isHumanTurn && selectedPit !== null && (
-          <span className="text-[10px] text-muted">
-            Pit {selectedPit + 1} selected &middot; Press Enter to play
-          </span>
-        )}
-      </div>
-
-      <div className="w-full">
         <Board
           gameState={gameState}
           viewFromBottom={true}
@@ -641,17 +745,29 @@ export function GameScreen() {
           showPitCounts={showPitCounts || pitCountsVisible}
           accentPit={accentPit}
         />
-      </div>
 
-      <div className="h-8 flex items-center justify-center">
         <LiveAnalysisPanel
           evalScore={liveHintEval}
           pv={liveHintPV}
           visible={liveHintVisible && liveHintPit !== null}
         />
-      </div>
 
-      <MoveList moves={gameState.moveHistory} />
+        {gameState.moveHistory.length > 0 && (
+          <MoveList moves={gameState.moveHistory} />
+        )}
+
+        {isHumanTurn && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleHint}
+            disabled={hintLoading}
+            className="self-start"
+          >
+            {hintLoading ? '...' : strings.game.hint}
+          </Button>
+        )}
+      </div>
 
       {gameState.status === 'finished' && (
         <GameEndOverlay
@@ -664,6 +780,6 @@ export function GameScreen() {
           onShare={handleShare}
         />
       )}
-    </div>
+    </PageLayout>
   )
 }

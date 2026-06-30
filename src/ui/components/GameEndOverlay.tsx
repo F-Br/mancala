@@ -1,5 +1,6 @@
 import type { GameState } from '../../engine'
 import { strings } from '../strings'
+import { Button } from './Button'
 
 interface GameEndOverlayProps {
   gameState: GameState
@@ -9,6 +10,14 @@ interface GameEndOverlayProps {
   onReview: () => void
   onHome: () => void
   onShare?: () => void
+}
+
+function resultColor(winner: 'bottom' | 'top' | 'draw' | null, bottomLabel: string): string {
+  if (winner === 'draw') return 'text-muted'
+  const youWin = (winner === 'bottom' && bottomLabel === strings.game.you) ||
+    (winner === 'top' && bottomLabel !== strings.game.you)
+  if (youWin) return 'text-accent'
+  return 'text-blunder'
 }
 
 export function GameEndOverlay({
@@ -29,51 +38,47 @@ export function GameEndOverlay({
         ? strings.game.draw
         : strings.game.winner(winner === 'bottom' ? bottomLabel : topLabel)
 
-  const finalScore = `${bottomLabel}: ${board[6]!}  \u2014  ${topLabel}: ${board[13]!}`
+  const finalScore = `${board[6]!}  \u2014  ${board[13]!}`
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="bg-board rounded-2xl p-6 mx-4 max-w-sm w-full flex flex-col items-center gap-4 shadow-2xl"
+        className="w-full max-w-sm rounded-md border border-border p-6 flex flex-col items-center gap-5"
         aria-live="assertive"
+        style={{
+          background: `linear-gradient(180deg, color-mix(in srgb, var(--theme-surface) 94%, white) 0%, var(--theme-surface) 100%)`,
+          boxShadow: `var(--theme-shadow-card), inset 0 1px 0 0 var(--theme-highlight)`,
+        }}
       >
-        <h2 className="text-2xl font-bold text-text">{resultText}</h2>
-        <p className="text-lg text-muted">{finalScore}</p>
+        <h2
+          className={`font-display text-display-lg font-bold text-center ${resultColor(winner, bottomLabel)}`}
+        >
+          {resultText}
+        </h2>
+
+        <p className="font-display text-display-md font-semibold text-text">
+          {bottomLabel} {finalScore} {topLabel}
+        </p>
+
         <div className="flex flex-col gap-2 w-full">
-          <button
-            type="button"
-            onClick={onNewGame}
-            className="w-full py-2 rounded-xl bg-accent text-bg font-semibold hover:brightness-110"
-          >
+          <Button variant="primary" onClick={onNewGame} className="w-full">
             {strings.game.newGame}
-          </button>
-          <button
-            type="button"
-            onClick={onReview}
-            className="w-full py-2 rounded-xl border border-accent text-accent font-semibold hover:bg-accent/10"
-          >
+          </Button>
+          <Button variant="secondary" onClick={onReview} className="w-full">
             {strings.game.reviewGame}
-          </button>
+          </Button>
           {onShare && (
-            <button
-              type="button"
-              onClick={onShare}
-              className="w-full py-2 rounded-xl border border-board/60 text-text font-medium hover:bg-board/40"
-            >
+            <Button variant="ghost" onClick={onShare} className="w-full">
               {strings.game.shareGame}
-            </button>
+            </Button>
           )}
-          <button
-            type="button"
-            onClick={onHome}
-            className="w-full py-2 rounded-xl text-muted font-semibold hover:text-text"
-          >
+          <Button variant="ghost" onClick={onHome} className="w-full">
             {strings.game.home}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

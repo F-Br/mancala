@@ -17,6 +17,7 @@ interface BoardProps {
   onExtraTurn?: () => void
   showPitCounts?: boolean
   accentPit?: number | null
+  className?: string
 }
 
 function seededRandom(seed: number): number {
@@ -155,6 +156,7 @@ function BoardInner({
   onExtraTurn,
   showPitCounts = false,
   accentPit = null,
+  className = '',
 }: BoardProps) {
   const boardRef = useRef<HTMLDivElement>(null)
 
@@ -396,7 +398,7 @@ function BoardInner({
   return (
     <div
       ref={boardRef}
-      className="relative w-full max-w-xl mx-auto"
+      className={`relative w-full max-w-xl mx-auto ${className}`}
     >
       <div className="board-slab flex items-center justify-center p-3 md:p-4">
         <div className="flex flex-col md:flex-row items-center gap-2 md:gap-3 w-full">
