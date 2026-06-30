@@ -126,7 +126,7 @@ function orderMoves(
 
 // ── Quiescence Search ────────────────────────────────────────────────────
 
-const MAX_QDEPTH = 4
+const MAX_QDEPTH = 3
 
 function quiesce(
   state: GameState,
@@ -152,17 +152,25 @@ function quiesce(
   const moves = legalMoves(state, rules)
   if (moves.length === 0) return { score: standPat, pv: [] }
 
-  const ordered = orderMoves(moves, state, rules)
+  // Quick check: if the current player has no empty pits, no capture is
+  // possible → skip the expensive loop entirely.
+  const { pitsPerSide } = rules
+  const ownStart = state.currentPlayer === 'bottom' ? 0 : pitsPerSide + 1
+  const ownEnd = state.currentPlayer === 'bottom' ? pitsPerSide - 1 : pitsPerSide * 2
+  let hasEmptyPit = false
+  for (let i = ownStart; i <= ownEnd && !hasEmptyPit; i++) {
+    if ((state.board[i] ?? 0) === 0) hasEmptyPit = true
+  }
+  if (!hasEmptyPit) return { score: standPat, pv: [] }
+
+  // No move ordering needed — captures are rare and stand-pat prunes well.
   let bestScore = standPat
   let bestPV: number[] = []
 
-  for (const pit of ordered) {
+  for (const pit of moves) {
     const child = applyMove(state, pit, rules)
     const lastMove = child.moveHistory[child.moveHistory.length - 1]
-    // Only captures are truly "noisy" in Mancala — material changes
-    // Extra turns alone don't warrant extension unless they capture
-    const isTactical = lastMove?.captured
-    if (!isTactical) continue
+    if (!lastMove?.captured) continue
 
     const result = quiesce(child, qDepth + 1, -(beta), -(alpha), rules, evalFn, cancelSignal)
     const score = lastMove?.wasExtraTurn ? result.score : -result.score
