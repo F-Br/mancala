@@ -3,7 +3,7 @@ import { KALAH_STANDARD, legalMoves } from '../engine'
 import { pickMoveBeginner, pickMoveCasual, minimaxWithAB, minimaxWithABTT } from './search'
 import type { CancelSignal } from './search'
 import { TranspositionTable } from './search'
-import { evaluateStrong, evaluateExpert } from './evaluation'
+import { evaluateStrong, evaluateExpert, WIN_SCORE, MAX_PLY } from './evaluation'
 import type { BotMessage, BotWorkerMessage, BotRequest } from './types'
 
 export class WorkerMessageHandler {
@@ -157,7 +157,7 @@ export class WorkerMessageHandler {
 
       bestResult = { score: result.score, pv: result.pv, depth }
 
-      if (bestResult.score > 9000) {
+      if (bestResult.score > WIN_SCORE - MAX_PLY) {
         sendBestResult()
         return
       }

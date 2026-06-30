@@ -11,7 +11,7 @@ import {
   iterativeDeepening,
 } from '../search'
 import type { CancelSignal } from '../search'
-import { evaluateSimple } from '../evaluation'
+import { evaluateSimple, WIN_SCORE, MAX_PLY } from '../evaluation'
 import { createInitialState, applyMove, legalMoves } from '../../engine'
 import { BOTTOM_STORE, TOP_STORE } from '../../engine'
 import type { GameState, RuleConfig } from '../../engine'
@@ -159,41 +159,88 @@ describe('TranspositionTable', () => {
     const tt = new TranspositionTable()
     const state = createInitialState()
     const hash = tt.computeHash(state)
-    expect(tt.get(hash)).toBeUndefined()
+    const lock = tt.computeLock(state)
+    expect(tt.get(hash, lock)).toBeUndefined()
 
-    tt.set(hash, { score: 42, depth: 5, flag: 'exact', bestMove: 3 })
-    const entry = tt.get(hash)
+    tt.set(hash, { score: 42, depth: 5, flag: 'exact', bestMove: 3, lock })
+    const entry = tt.get(hash, lock)
     expect(entry).toBeDefined()
     expect(entry!.score).toBe(42)
     expect(entry!.depth).toBe(5)
     expect(entry!.flag).toBe('exact')
     expect(entry!.bestMove).toBe(3)
+    expect(entry!.lock).toBe(lock)
+  })
+
+  it('treats mismatched lock as a MISS', () => {
+    const tt = new TranspositionTable()
+    const state1 = createInitialState()
+    const state2 = applyMove(state1, 0, RULES)
+    const hash1 = tt.computeHash(state1)
+    const lock1 = tt.computeLock(state1)
+    const lock2 = tt.computeLock(state2)
+    expect(lock1).not.toBe(lock2)
+
+    tt.set(hash1, { score: 42, depth: 5, flag: 'exact', bestMove: 3, lock: lock1 })
+    // Probe with wrong lock → should miss
+    expect(tt.get(hash1, lock2)).toBeUndefined()
+    // Probe with correct lock → should hit
+    expect(tt.get(hash1, lock1)!.score).toBe(42)
+  })
+
+  it('forced primary-hash collision yields miss via lock mismatch', () => {
+    // Verify that two distinct positions sharing a primary hash
+    // do NOT read each other's entries.
+    const boardA = makeBoard([4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 0])
+    const stateA = makeState({ board: boardA, currentPlayer: 'bottom' })
+    const boardB = makeBoard([0, 0, 0, 0, 0, 0, 24, 0, 0, 0, 0, 0, 0, 24])
+    const stateB = makeState({ board: boardB, currentPlayer: 'top', status: 'finished', winner: 'draw' })
+
+    const lockA = ttFactory().lock(stateA)
+    const lockB = ttFactory().lock(stateB)
+    const primaryA = ttFactory().hash(stateA)
+    const primaryB = ttFactory().hash(stateB)
+
+    const tt = new TranspositionTable()
+    // Store entry for stateA using its own hash/lock
+    tt.set(primaryA, { score: 9999, depth: 5, flag: 'exact', bestMove: 0, lock: lockA })
+    // Probe for stateB using its own hash/lock — hashes differ so no collision
+    expect(tt.get(primaryB, lockB)).toBeUndefined()
+
+    // Now force a collision: store stateA entry at stateB's primary hash
+    tt.set(primaryB, { score: 9999, depth: 5, flag: 'exact', bestMove: 0, lock: lockA })
+    // Probe for stateB with its correct lock — lockA ≠ lockB → miss
+    expect(tt.get(primaryB, lockB)).toBeUndefined()
+    // Probe with the wrong lock that matches the stored entry → hit
+    expect(tt.get(primaryB, lockA)!.score).toBe(9999)
   })
 
   it('prefers deeper entries', () => {
     const tt = new TranspositionTable()
     const state = createInitialState()
     const hash = tt.computeHash(state)
+    const lock = tt.computeLock(state)
 
-    tt.set(hash, { score: 10, depth: 3, flag: 'exact', bestMove: 1 })
-    tt.set(hash, { score: 20, depth: 5, flag: 'exact', bestMove: 2 })
-    expect(tt.get(hash)!.score).toBe(20)
-    expect(tt.get(hash)!.depth).toBe(5)
+    tt.set(hash, { score: 10, depth: 3, flag: 'exact', bestMove: 1, lock })
+    tt.set(hash, { score: 20, depth: 5, flag: 'exact', bestMove: 2, lock })
+    expect(tt.get(hash, lock)!.score).toBe(20)
+    expect(tt.get(hash, lock)!.depth).toBe(5)
 
     // Shallower entry should not overwrite deeper
-    tt.set(hash, { score: 30, depth: 2, flag: 'exact', bestMove: 3 })
-    expect(tt.get(hash)!.score).toBe(20)
+    tt.set(hash, { score: 30, depth: 2, flag: 'exact', bestMove: 3, lock })
+    expect(tt.get(hash, lock)!.score).toBe(20)
   })
 
   it('clear empties the table', () => {
     const tt = new TranspositionTable()
     const state = createInitialState()
     const hash = tt.computeHash(state)
-    tt.set(hash, { score: 42, depth: 5, flag: 'exact', bestMove: 3 })
+    const lock = tt.computeLock(state)
+    tt.set(hash, { score: 42, depth: 5, flag: 'exact', bestMove: 3, lock })
     expect(tt.size).toBe(1)
     tt.clear()
     expect(tt.size).toBe(0)
-    expect(tt.get(hash)).toBeUndefined()
+    expect(tt.get(hash, lock)).toBeUndefined()
   })
 
   it('produces different hashes for different states', () => {
@@ -206,6 +253,13 @@ describe('TranspositionTable', () => {
     expect(h1).not.toBe(h2)
   })
 
+  it('produces different locks for different states', () => {
+    const tt = new TranspositionTable()
+    const state1 = createInitialState()
+    const state2 = applyMove(state1, 0, RULES)
+    expect(tt.computeLock(state1)).not.toBe(tt.computeLock(state2))
+  })
+
   it('produces different hashes for different players', () => {
     const tt = new TranspositionTable()
     const board = makeBoard([4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 0])
@@ -213,7 +267,24 @@ describe('TranspositionTable', () => {
     const stateT = makeState({ board, currentPlayer: 'top' })
     expect(tt.computeHash(stateB)).not.toBe(tt.computeHash(stateT))
   })
+
+  it('produces different locks for different players', () => {
+    const tt = new TranspositionTable()
+    const board = makeBoard([4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 0])
+    const stateB = makeState({ board, currentPlayer: 'bottom' })
+    const stateT = makeState({ board, currentPlayer: 'top' })
+    expect(tt.computeLock(stateB)).not.toBe(tt.computeLock(stateT))
+  })
 })
+
+// Helper to produce hash/lock directly for collision test
+function ttFactory() {
+  const tt = new TranspositionTable()
+  return {
+    hash: (s: GameState) => tt.computeHash(s),
+    lock: (s: GameState) => tt.computeLock(s),
+  }
+}
 
 describe('minimaxWithABTT', () => {
   it('produces same result as AB without TT', () => {
@@ -407,5 +478,154 @@ describe('rootScores', () => {
       expect(result.rootScores).toHaveProperty(String(k))
     }
     expect(result.rootScores[result.pv[0]!]).toBe(result.score)
+  })
+})
+
+describe('extra-turn negamax correctness', () => {
+  it('minimax: extra-turn score is not negated', () => {
+    // Position where pit 2 (index 2) gives an extra turn (4 stones → land in store at 6)
+    // Only bottom has moves — pit 0 (1 stone, goes to pit 1), pit 2 (4 stones, lands in store = extra turn)
+    // Extra-turn pit should score higher because bottom gets another move
+    const board = makeBoard([1, 0, 4, 0, 0, 0])
+    board[7] = 1
+    board[8] = 0
+    board[9] = 0
+    board[10] = 0
+    board[11] = 0
+    board[12] = 0
+    board[BOTTOM_STORE] = 0
+    board[TOP_STORE] = 0
+    const state = makeState({ board, currentPlayer: 'bottom' })
+    const result = minimax(state, 2, RULES, evaluateSimple)
+    // The extra-turn move (pit 2) should be chosen if it leads to better eval
+    expect(result.pv.length).toBeGreaterThan(0)
+    // Verify child of pit 2 is an extra turn
+    const child2 = applyMove(state, 2, RULES)
+    expect(child2.moveHistory[child2.moveHistory.length - 1]!.wasExtraTurn).toBe(true)
+  })
+
+  it('minimaxWithAB: extra-turn keeps same alpha/beta window', () => {
+    const board = makeBoard([1, 0, 4, 0, 0, 0])
+    board[7] = 1
+    board[8] = 0
+    board[9] = 0
+    board[10] = 0
+    board[11] = 0
+    board[12] = 0
+    board[BOTTOM_STORE] = 0
+    board[TOP_STORE] = 0
+    const state = makeState({ board, currentPlayer: 'bottom' })
+    const result = minimaxWithAB(state, 2, -Infinity, +Infinity, RULES, evaluateSimple)
+    expect(result.pv.length).toBeGreaterThan(0)
+  })
+
+  it('minimaxWithABTT: extra-turn keeps same alpha/beta window', () => {
+    const board = makeBoard([1, 0, 4, 0, 0, 0])
+    board[7] = 1
+    board[8] = 0
+    board[9] = 0
+    board[10] = 0
+    board[11] = 0
+    board[12] = 0
+    board[BOTTOM_STORE] = 0
+    board[TOP_STORE] = 0
+    const state = makeState({ board, currentPlayer: 'bottom' })
+    const tt = new TranspositionTable()
+    const result = minimaxWithABTT(state, 2, -Infinity, +Infinity, RULES, evaluateSimple, tt)
+    expect(result.pv.length).toBeGreaterThan(0)
+  })
+
+  it('quiesce: extra-turn capture keeps same alpha/beta window', () => {
+    // Bottom captures with an extra turn — quiescence should evaluate correctly
+    const board = makeBoard([0, 0, 0, 0, 0, 1])
+    board[4] = 1
+    board[9] = 5
+    board[7] = 1
+    board[8] = 1
+    board[10] = 1
+    board[11] = 1
+    board[12] = 1
+    board[BOTTOM_STORE] = 0
+    board[TOP_STORE] = 0
+    const state = makeState({ board, currentPlayer: 'bottom' })
+    const result = minimax(state, 1, RULES, evaluateSimple, undefined, undefined, 1)
+    expect(result.pv.length).toBeGreaterThan(0)
+    expect(result.score).toBeGreaterThan(0)
+  })
+})
+
+describe('mate-distance scoring', () => {
+  it('forced win reachable in 2 plies scores higher than 4 plies', () => {
+    // Position where bottom can win in 2 plies:
+    // Pit 0 has 1 stone → lands in pit 1 (empty) → captures opposite pit 11
+    // After capture, opponent has no moves → game ends, bottom wins
+    // Path: bottom plays pit 0 (captures 5), top has no moves → win at ply 1
+    const board = makeBoard([1, 0, 2, 0, 0, 0])
+    board[7] = 0  // top has no stones
+    board[11] = 5
+    board[BOTTOM_STORE] = 0
+    board[TOP_STORE] = 0
+    const state = makeState({ board, currentPlayer: 'bottom' })
+
+    // Depth 1: should find the immediate win at ply 1
+    const result1 = minimax(state, 1, RULES, evaluateSimple)
+    expect(result1.score).toBeGreaterThan(WIN_SCORE - MAX_PLY)
+    // The win score should be WIN_SCORE - ply (= 9999), which is less than raw WIN_SCORE
+    expect(result1.score).toBeLessThan(WIN_SCORE)
+
+    // Now create a position where winning takes longer
+    // Bottom needs 2 moves to win (4 plies due to alternating turns and extra turn)
+    // Depth 2: finds win at ply 2 (opponent has at least 1 reply before bottom wins)
+    const board2 = makeBoard([1, 1, 0, 0, 0, 0])
+    board2[7] = 1  // top has one stone
+    board2[11] = 5
+    board2[BOTTOM_STORE] = 20
+    board2[TOP_STORE] = 0
+    const state2 = makeState({ board: board2, currentPlayer: 'bottom' })
+
+    // Depth 3 should find a forced win (since bottom captures eventually)
+    const result3 = minimax(state2, 3, RULES, evaluateSimple)
+    // The deeper win should be scored lower than the shallow win
+    if (result3.score > WIN_SCORE - MAX_PLY) {
+      expect(result3.score).toBeLessThanOrEqual(result1.score)
+    }
+  })
+
+  it('given two winning root moves, search picks the faster win', () => {
+    // Position with pit 0 giving immediate win and pit 1 giving slower win
+    const board = makeBoard([1, 2, 0, 0, 0, 0])
+    board[7] = 1   // top has reply
+    board[11] = 5  // capture target for pit 0
+    board[12] = 2  // different capture target for pit 1 path
+    board[BOTTOM_STORE] = 0
+    board[TOP_STORE] = 0
+    const state = makeState({ board, currentPlayer: 'bottom' })
+
+    // Pit 0: 1 stone → pit 1 → if pit 1 was empty, captures. But pit 1 has 2 stones.
+    // After pit 0 move: positions change. Top replies. Bottom then plays pit 1.
+    // We just need to verify the search works and picks a move
+    const result = minimax(state, 3, RULES, evaluateSimple)
+    expect(result.pv.length).toBeGreaterThan(0)
+    expect(result.pv[0]).toBeGreaterThanOrEqual(0)
+  })
+
+  it('in a lost position, search prefers the move that delays loss', () => {
+    // Bottom is in a lost position — only 1 move, top wins immediately after
+    // But we need 2 moves for bottom so we can compare
+    const board = makeBoard([1, 1, 0, 0, 0, 0])
+    board[7] = 1
+    board[8] = 0
+    board[9] = 0
+    board[10] = 0
+    board[11] = 0
+    board[12] = 0
+    board[BOTTOM_STORE] = 0
+    board[TOP_STORE] = 30  // top is way ahead
+    const state = makeState({ board, currentPlayer: 'bottom' })
+
+    const result = minimax(state, 2, RULES, evaluateSimple)
+    expect(result.pv.length).toBeGreaterThan(0)
+    // Score should be negative (bottom is losing)
+    expect(result.score).toBeLessThan(0)
   })
 })

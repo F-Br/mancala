@@ -3,6 +3,7 @@ import { BOTTOM_STORE, TOP_STORE } from '../engine'
 import { legalMoves, applyMove } from '../engine'
 
 const WIN_SCORE = 10000
+const MAX_PLY = 1000
 
 function terminalScore(state: GameState): number | null {
   if (state.status !== 'finished') return null
@@ -101,4 +102,4 @@ export function evaluateExpert(state: GameState, rules: RuleConfig): number {
   return score
 }
 
-export { terminalScore, WIN_SCORE }
+export { terminalScore, WIN_SCORE, MAX_PLY }
