@@ -11,12 +11,14 @@ export interface CancelSignal {
 export interface SearchResult {
   score: number
   pv: number[]
+  rootScores?: Record<number, number>
 }
 
 export interface IterativeResult {
   score: number
   pv: number[]
   depth: number
+  rootScores: Record<number, number>
 }
 
 // ── Zobrist Transposition Table ──────────────────────────────────────────
@@ -122,11 +124,15 @@ function orderMoves(
   return scored.map((s) => s.pit)
 }
 
-// ── Search Functions ─────────────────────────────────────────────────────
+// ── Quiescence Search ────────────────────────────────────────────────────
 
-function minimax(
+const MAX_QDEPTH = 1
+
+function quiesce(
   state: GameState,
-  depth: number,
+  qDepth: number,
+  alpha: number,
+  beta: number,
   rules: RuleConfig,
   evalFn: EvaluationFn,
   cancelSignal?: CancelSignal,
@@ -135,8 +141,62 @@ function minimax(
   if (state.status === 'finished') {
     return { score: evalFn(state, rules), pv: [] }
   }
-  if (depth === 0) {
+  if (qDepth >= MAX_QDEPTH) {
     return { score: evalFn(state, rules), pv: [] }
+  }
+
+  const standPat = evalFn(state, rules)
+  if (standPat >= beta) return { score: beta, pv: [] }
+  if (standPat > alpha) alpha = standPat
+
+  const moves = legalMoves(state, rules)
+  if (moves.length === 0) return { score: standPat, pv: [] }
+
+  const ordered = orderMoves(moves, state, rules)
+  let bestScore = standPat
+  let bestPV: number[] = []
+
+  for (const pit of ordered) {
+    const child = applyMove(state, pit, rules)
+    const lastMove = child.moveHistory[child.moveHistory.length - 1]
+    // Only captures are truly "noisy" in Mancala — material changes
+    // Extra turns alone don't warrant extension unless they capture
+    const isTactical = lastMove?.captured
+    if (!isTactical) continue
+
+    const result = quiesce(child, qDepth + 1, -(beta), -(alpha), rules, evalFn, cancelSignal)
+    const score = lastMove?.wasExtraTurn ? result.score : -result.score
+
+    if (score > bestScore) {
+      bestScore = score
+      bestPV = [pit, ...result.pv]
+    }
+    if (score > alpha) alpha = score
+    if (alpha >= beta) break
+  }
+
+  return { score: bestScore, pv: bestPV }
+}
+
+// ── Search Functions ─────────────────────────────────────────────────────
+
+function minimax(
+  state: GameState,
+  depth: number,
+  rules: RuleConfig,
+  evalFn: EvaluationFn,
+  cancelSignal?: CancelSignal,
+  rootScores?: Record<number, number>,
+  quiesceDepth?: number,
+): SearchResult {
+  if (cancelSignal?.cancelled) return { score: 0, pv: [] }
+  if (state.status === 'finished') {
+    return { score: evalFn(state, rules), pv: [] }
+  }
+  if (depth === 0) {
+    return quiesceDepth && quiesceDepth > 0
+      ? quiesce(state, 0, -Infinity, +Infinity, rules, evalFn, cancelSignal)
+      : { score: evalFn(state, rules), pv: [] }
   }
 
   const moves = legalMoves(state, rules)
@@ -152,8 +212,12 @@ function minimax(
     if (cancelSignal?.cancelled) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
-    const result = minimax(child, depth - 1, rules, evalFn, cancelSignal)
+    const result = minimax(child, depth - 1, rules, evalFn, cancelSignal, undefined, quiesceDepth)
     const score = childMove?.wasExtraTurn ? result.score : -result.score
+
+    if (rootScores !== undefined) {
+      rootScores[pit] = score
+    }
 
     if (score > bestScore) {
       bestScore = score
@@ -172,13 +236,17 @@ function minimaxWithAB(
   rules: RuleConfig,
   evalFn: EvaluationFn,
   cancelSignal?: CancelSignal,
+  rootScores?: Record<number, number>,
+  quiesceDepth?: number,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
   if (state.status === 'finished') {
     return { score: evalFn(state, rules), pv: [] }
   }
   if (depth === 0) {
-    return { score: evalFn(state, rules), pv: [] }
+    return quiesceDepth && quiesceDepth > 0
+      ? quiesce(state, 0, alpha, beta, rules, evalFn, cancelSignal)
+      : { score: evalFn(state, rules), pv: [] }
   }
 
   const moves = legalMoves(state, rules)
@@ -194,8 +262,12 @@ function minimaxWithAB(
     if (cancelSignal?.cancelled) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
-    const result = minimaxWithAB(child, depth - 1, -beta, -alpha, rules, evalFn, cancelSignal)
+    const result = minimaxWithAB(child, depth - 1, -beta, -alpha, rules, evalFn, cancelSignal, undefined, quiesceDepth)
     const score = childMove?.wasExtraTurn ? result.score : -result.score
+
+    if (rootScores !== undefined) {
+      rootScores[pit] = score
+    }
 
     if (score > bestScore) {
       bestScore = score
@@ -218,6 +290,8 @@ function minimaxWithABTT(
   evalFn: EvaluationFn,
   tt: TranspositionTable,
   cancelSignal?: CancelSignal,
+  rootScores?: Record<number, number>,
+  quiesceDepth?: number,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
 
@@ -249,7 +323,9 @@ function minimaxWithABTT(
     return { score: evalFn(state, rules), pv: [] }
   }
   if (depth === 0) {
-    return { score: evalFn(state, rules), pv: [] }
+    return quiesceDepth && quiesceDepth > 0
+      ? quiesce(state, 0, alpha, beta, rules, evalFn, cancelSignal)
+      : { score: evalFn(state, rules), pv: [] }
   }
 
   const moves = legalMoves(state, rules)
@@ -265,8 +341,12 @@ function minimaxWithABTT(
     if (cancelSignal?.cancelled) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
-    const result = minimaxWithABTT(child, depth - 1, -beta, -alpha, rules, evalFn, tt, cancelSignal)
+    const result = minimaxWithABTT(child, depth - 1, -beta, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth)
     const score = childMove?.wasExtraTurn ? result.score : -result.score
+
+    if (rootScores !== undefined) {
+      rootScores[pit] = score
+    }
 
     if (score > bestScore) {
       bestScore = score
@@ -303,24 +383,26 @@ export function iterativeDeepening(
   evalFn: EvaluationFn,
   tt: TranspositionTable | null,
   cancelSignal?: CancelSignal,
+  quiesceDepth?: number,
 ): IterativeResult {
   const startTime = performance.now()
-  let bestResult: IterativeResult = { score: 0, pv: [], depth: 0 }
+  let bestResult: IterativeResult = { score: 0, pv: [], depth: 0, rootScores: {} }
 
   for (let depth = 1; ; depth++) {
     if (cancelSignal?.cancelled) break
     if (performance.now() - startTime >= timeBudgetMs) break
 
+    const rootScores: Record<number, number> = {}
     let result: SearchResult
     if (tt) {
-      result = minimaxWithABTT(state, depth, -Infinity, +Infinity, rules, evalFn, tt, cancelSignal)
+      result = minimaxWithABTT(state, depth, -Infinity, +Infinity, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth)
     } else {
-      result = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal)
+      result = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal, rootScores, quiesceDepth)
     }
 
     if (cancelSignal?.cancelled) break
 
-    bestResult = { score: result.score, pv: result.pv, depth }
+    bestResult = { score: result.score, pv: result.pv, depth, rootScores }
 
     if (bestResult.score > 9000) break
     if (performance.now() - startTime >= timeBudgetMs) break

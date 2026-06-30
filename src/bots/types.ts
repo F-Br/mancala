@@ -54,6 +54,7 @@ export interface AnalysisResponse {
   principalVariation: number[]
   depthReached: number
   requestId: number
+  rootScores: Record<number, number>
 }
 
 export interface AnalysisError {

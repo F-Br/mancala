@@ -7,6 +7,7 @@ import type { AnalysisMessage, AnalysisWorkerMessage, AnalysisRequest } from './
 
 export class AnalysisWorkerHandler {
   private currentCancel: CancelSignal | null = null
+  private sharedTT: TranspositionTable = new TranspositionTable()
   private readonly postMsg: (msg: AnalysisWorkerMessage) => void
 
   constructor(postMsg: (msg: AnalysisWorkerMessage) => void) {
@@ -59,9 +60,9 @@ export class AnalysisWorkerHandler {
     const startTime = performance.now()
     const budget = timeBudgetMs
     const evalFn = evaluateExpert
-    const tt = new TranspositionTable()
+    const tt = this.sharedTT
 
-    let bestResult = { score: 0, pv: [] as number[], depth: 0 }
+    let bestResult = { score: 0, pv: [] as number[], depth: 0, rootScores: {} as Record<number, number> }
     let depth = 1
 
     const sendBestResult = (): void => {
@@ -72,6 +73,7 @@ export class AnalysisWorkerHandler {
             score: 0,
             pv: [moves[Math.floor(Math.random() * moves.length)]!],
             depth: 0,
+            rootScores: {},
           }
         }
       }
@@ -82,6 +84,7 @@ export class AnalysisWorkerHandler {
         principalVariation: bestResult.pv,
         depthReached: bestResult.depth,
         requestId,
+        rootScores: bestResult.rootScores,
       })
       if (this.currentCancel === cancelSignal) {
         this.currentCancel = null
@@ -98,6 +101,7 @@ export class AnalysisWorkerHandler {
         return
       }
 
+      const rootScores: Record<number, number> = {}
       const result = minimaxWithABTT(
         state,
         depth,
@@ -107,6 +111,8 @@ export class AnalysisWorkerHandler {
         evalFn,
         tt,
         cancelSignal,
+        rootScores,
+        1,
       )
 
       if (cancelSignal.cancelled) {
@@ -114,7 +120,7 @@ export class AnalysisWorkerHandler {
         return
       }
 
-      bestResult = { score: result.score, pv: result.pv, depth }
+      bestResult = { score: result.score, pv: result.pv, depth, rootScores }
 
       if (bestResult.score > 9000) {
         sendBestResult()

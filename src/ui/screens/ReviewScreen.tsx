@@ -165,17 +165,19 @@ export function ReviewScreen() {
           pv: [],
           depth: 0,
           playedEval: 0,
+          rootScores: {},
         })
         setProgress({ current: i + 1, total: moveCount })
         continue
       }
 
       try {
-        const handle = await requestAnalysis(pos.state, 500)
+        const handle = await requestAnalysis(pos.state, 1000)
         analysisRef.current = handle
         const result = await handle.promise
         analysisRef.current = null
 
+        const rootScores = result.rootScores ?? {}
         const playedMove = pos.move
 
         if (playedMove.pitIndex === result.pitIndex || result.pitIndex < 0) {
@@ -185,16 +187,22 @@ export function ReviewScreen() {
             pv: result.principalVariation,
             depth: result.depthReached,
             playedEval: result.evalScore,
+            rootScores,
           })
         } else {
           let playedEval = result.evalScore
-          try {
-            const childState = applyMove(pos.state, playedMove.pitIndex, rules)
-            const childEval = evaluateExpert(childState, rules)
-            const childMove = childState.moveHistory[childState.moveHistory.length - 1]
-            playedEval = childMove?.wasExtraTurn ? childEval : -childEval
-          } catch {
-            playedEval = result.evalScore
+          const rootScore = rootScores[playedMove.pitIndex]
+          if (rootScore !== undefined) {
+            playedEval = rootScore
+          } else {
+            try {
+              const childState = applyMove(pos.state, playedMove.pitIndex, rules)
+              const childEval = evaluateExpert(childState, rules)
+              const childMove = childState.moveHistory[childState.moveHistory.length - 1]
+              playedEval = childMove?.wasExtraTurn ? childEval : -childEval
+            } catch {
+              playedEval = result.evalScore
+            }
           }
 
           entries.push({
@@ -203,6 +211,7 @@ export function ReviewScreen() {
             pv: result.principalVariation,
             depth: result.depthReached,
             playedEval,
+            rootScores,
           })
         }
 
@@ -215,6 +224,7 @@ export function ReviewScreen() {
           pv: [],
           depth: 0,
           playedEval: 0,
+          rootScores: {},
         })
       }
 

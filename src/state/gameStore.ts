@@ -12,6 +12,7 @@ export interface AnalysisCacheEntry {
   pv: number[]
   depth: number
   playedEval: number
+  rootScores: Record<number, number>
 }
 
 export interface SavedMeta {

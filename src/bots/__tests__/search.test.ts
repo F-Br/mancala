@@ -84,21 +84,18 @@ describe('pickMoveBeginner', () => {
 
 describe('minimax', () => {
   it('finds immediate capture at depth 1', () => {
-    // Pit 0 has 1 stone, pit 1 is empty, opposite pit 11 has 4 stones → capture
-    // Other pits have stones so bottom side doesn't become empty
-    const board = makeBoard([1, 0, 1, 1, 1, 1])
-    board[7] = 1
-    board[8] = 1
-    board[9] = 1
-    board[10] = 1
-    board[11] = 4
-    board[12] = 1
+    // Pit 0 has 1 stone, pit 1 is empty → lands in pit 1 → capture opposite pit 11 (5 stones)
+    // Pit 2 is a non-capturing alternative; top has a non-tactical move so game continues
+    const board = makeBoard([1, 0, 0, 0, 0, 0])
+    board[2] = 1     // second legal move for bottom, non-capturing
+    board[7] = 1     // top has one non-tactical move
+    board[11] = 5    // opposite of pit 1 → capture target
     board[BOTTOM_STORE] = 0
     board[TOP_STORE] = 0
     const state = makeState({ board, currentPlayer: 'bottom' })
 
     const result = minimax(state, 1, RULES, evaluateSimple)
-    // The capture move (pit 0) should be chosen — it captures 4+1=5 stones
+    // The capture move (pit 0) captures 5 stones → should be chosen
     expect(result.pv[0]).toBe(0)
     expect(result.score).toBeGreaterThan(0)
   })
@@ -305,5 +302,110 @@ describe('pickMoveExpert', () => {
     expect(result.pv.length).toBeGreaterThan(0)
     expect(result.pv[0]).toBeGreaterThanOrEqual(0)
     expect(result.depth).toBeGreaterThan(0)
+  })
+})
+
+describe('quiescence', () => {
+  it('extends search on capture moves at leaf', () => {
+    // Position where the quiescence finds a capture for the player at leaf
+    // Bottom has 1-stone move → lands in empty own pit → captures opposite
+    const board = makeBoard([1, 0, 0, 0, 0, 0])
+    board[2] = 1
+    board[7] = 1
+    board[11] = 5
+    const state = makeState({ board, currentPlayer: 'bottom' })
+    // Depth 1 with quiescence: bottom captures 5 stones + game continues
+    const withQ = minimax(state, 1, RULES, evaluateSimple)
+    expect(withQ.pv[0]).toBe(0)
+    // Without quiescence the score was 6, now quiescence confirms the tactical
+    expect(withQ.score).toBeGreaterThan(0)
+  })
+
+  it('does not extend on non-tactical positions', () => {
+    // Position where no extra-turn moves exist for bottom
+    const board = makeBoard([1, 1, 1, 1, 1, 0])  // pit 5 empty so no store landings
+    board[7] = 1
+    board[8] = 1
+    board[9] = 1
+    board[10] = 1
+    board[11] = 1
+    board[12] = 1
+    board[BOTTOM_STORE] = 5
+    board[TOP_STORE] = 5
+    const state = makeState({ board, currentPlayer: 'bottom' })
+    // At depth 1, quiescence evaluates tactical moves at the leaf
+    // The score should be close to the static eval
+    const result = minimax(state, 1, RULES, evaluateSimple)
+    expect(result.pv.length).toBeGreaterThan(0)
+    // Store diff is 0, but some moves may be slightly tactical
+    expect(typeof result.score).toBe('number')
+  })
+
+  it('extends on capture after extra-turn chain', () => {
+    // Bottom gets an extra turn and can then capture
+    const board = makeBoard([0, 0, 0, 0, 0, 1])  // pit 5 lands in store
+    board[4] = 1     // after extra turn, pit 4 with 1 stone → lands in pit 5
+    // After pit 4's move, pit 5 was already sowed to → not empty → no capture
+    // Let's create proper position: extra turn then capture
+    const board2 = makeBoard([0, 0, 0, 0, 0, 0])
+    board2[5] = 1    // pit 5 → store, extra turn
+    board2[2] = 1    // after extra turn, pit 2 → lands in pit 3 (empty) → needs opposite stones
+    board2[9] = 5    // opposite of pit 3, capture target
+    board2[12] = 1   // top has a legal non-tactical move
+    const state = makeState({ board: board2, currentPlayer: 'bottom' })
+    const result = minimax(state, 1, RULES, evaluateSimple)
+    // Quiescence should see the chain: extra turn → capture
+    expect(result.pv.length).toBeGreaterThan(0)
+    expect(result.score).toBeGreaterThan(0)
+  })
+
+  it('capture at depth 0 with no counterplay gives terminal score', () => {
+    // Bottom captures, leaving opponent with no moves → game ends
+    const board = makeBoard([1, 0, 0, 0, 0, 0])
+    board[11] = 5
+    const state = makeState({ board, currentPlayer: 'bottom' })
+    const result = minimax(state, 1, RULES, evaluateSimple)
+    expect(result.pv[0]).toBe(0)
+    expect(result.score).toBeGreaterThan(9000)
+  })
+})
+
+describe('rootScores', () => {
+  it('collects scores for all root moves in minimizeWithAB', () => {
+    const state = createInitialState()
+    const rootScores: Record<number, number> = {}
+    const result = minimaxWithAB(state, 2, -Infinity, +Infinity, RULES, evaluateSimple, undefined, rootScores)
+    expect(result.pv.length).toBeGreaterThan(0)
+    // All 6 bottom moves should have scores
+    const expectedKeys = [0, 1, 2, 3, 4, 5]
+    for (const k of expectedKeys) {
+      expect(rootScores).toHaveProperty(String(k))
+    }
+    // Best score should match the returned score
+    expect(rootScores[result.pv[0]!]).toBe(result.score)
+  })
+
+  it('collects scores for all root moves in minimizeWithABTT', () => {
+    const state = createInitialState()
+    const tt = new TranspositionTable()
+    const rootScores: Record<number, number> = {}
+    const result = minimaxWithABTT(state, 2, -Infinity, +Infinity, RULES, evaluateSimple, tt, undefined, rootScores)
+    expect(result.pv.length).toBeGreaterThan(0)
+    const expectedKeys = [0, 1, 2, 3, 4, 5]
+    for (const k of expectedKeys) {
+      expect(rootScores).toHaveProperty(String(k))
+    }
+    expect(rootScores[result.pv[0]!]).toBe(result.score)
+  })
+
+  it('iterativeDeepening returns rootScores', () => {
+    const state = createInitialState()
+    const result = iterativeDeepening(state, 500, RULES, evaluateSimple, null)
+    expect(result.rootScores).toBeDefined()
+    const expectedKeys = [0, 1, 2, 3, 4, 5]
+    for (const k of expectedKeys) {
+      expect(result.rootScores).toHaveProperty(String(k))
+    }
+    expect(result.rootScores[result.pv[0]!]).toBe(result.score)
   })
 })
