@@ -143,9 +143,11 @@ export class WorkerMessageHandler {
           evalFn,
           tt,
           cancelSignal,
+          undefined,
+          1,
         )
       } else {
-        result = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal)
+        result = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal, undefined, 1)
       }
 
       if (cancelSignal.cancelled) {

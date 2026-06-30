@@ -122,11 +122,6 @@ export class AnalysisWorkerHandler {
 
       bestResult = { score: result.score, pv: result.pv, depth, rootScores }
 
-      if (bestResult.score > 9000) {
-        sendBestResult()
-        return
-      }
-
       depth++
       setTimeout(iterate, 0)
     }
