@@ -404,21 +404,27 @@ export function ReviewScreen() {
 
   const displayState = showPV && pvStates[pvStep] ? pvStates[pvStep] : (currentPos?.state ?? null)
 
-  // Primary accent: the move the player actually played (or PV step during playback)
+  // Primary accent (theme colour): the recommended/best move (or PV step during playback)
   const accentPitForDisplay =
     showPV && pvMoves[pvStep] != null
       ? pvMoves[pvStep]
-      : currentPos?.move?.pitIndex ?? null
+      : currentEntry && currentEntry.bestPitIndex >= 0
+        ? currentEntry.bestPitIndex
+        : null
 
-  // Secondary accent: the recommended/best move (only when it differs from played)
+  // Secondary accent (classification-coloured): the move the player actually played
   const secondaryAccentPit =
-    !showPV && playedMoveNotBest && currentEntry
-      ? currentEntry.bestPitIndex
-      : null
+    showPV
+      ? null
+      : currentPos?.move?.pitIndex ?? null
 
   const secondaryAccentColor =
     secondaryAccentPit != null && currentEntry
-      ? classificationColors[classifyEvalDrop(currentEntry.bestEval - currentEntry.playedEval)]
+      ? classificationColors[
+          currentEntry.bestPitIndex === currentPos?.move?.pitIndex
+            ? 'best'
+            : classifyEvalDrop(currentEntry.bestEval - currentEntry.playedEval)
+        ]
       : undefined
 
   const board = displayState?.board

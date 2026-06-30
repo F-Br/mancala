@@ -338,7 +338,25 @@ function BoardInner({
       const count = displayBoard[pitIndex]!
       const enabled = clickable && count > 0
       const isAccent = accentPit === pitIndex
-      const isSecondary = !isAccent && secondaryAccentPit === pitIndex
+      const isSecondary = secondaryAccentPit === pitIndex
+      const isBoth = isAccent && isSecondary && secondaryAccentColor != null
+
+      let ringClass = ''
+      let ringStyle: React.CSSProperties | undefined
+      if (isBoth) {
+        ringClass = 'glow-both cursor-default'
+        ringStyle = { '--glow-classification-color': secondaryAccentColor } as React.CSSProperties
+      } else if (isAccent) {
+        ringClass = 'glow-accent cursor-pointer hover:scale-105 active:scale-95 transition-all duration-150'
+      } else if (isSecondary && secondaryAccentColor) {
+        ringClass = 'glow-classification cursor-default'
+        ringStyle = { '--glow-classification-color': secondaryAccentColor } as React.CSSProperties
+      } else if (enabled) {
+        ringClass = 'cursor-pointer hover:scale-105 hover:glow-accent active:scale-95 transition-all duration-150'
+      } else {
+        ringClass = 'opacity-60 cursor-default'
+      }
+
       return (
         <button
           key={pitIndex}
@@ -347,21 +365,8 @@ function BoardInner({
           onClick={() => enabled && onPitClick(pitIndex)}
           disabled={!enabled}
           aria-label={pitAriaLabel(pitIndex)}
-          className={
-            'relative w-11 h-11 md:w-14 md:h-14 well-pit ' +
-            (isAccent
-              ? 'glow-accent cursor-pointer hover:scale-105 active:scale-95 transition-all duration-150'
-              : isSecondary
-                ? 'glow-classification cursor-default'
-                : enabled
-                  ? 'cursor-pointer hover:scale-105 hover:glow-accent active:scale-95 transition-all duration-150'
-                  : 'opacity-60 cursor-default')
-          }
-          style={
-            isSecondary && secondaryAccentColor
-              ? ({ '--glow-classification-color': secondaryAccentColor } as React.CSSProperties)
-              : undefined
-          }
+          className={`relative w-11 h-11 md:w-14 md:h-14 well-pit ${ringClass}`}
+          style={ringStyle}
         >
           <StoneCluster
             count={count}
