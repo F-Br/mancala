@@ -82,6 +82,21 @@ function StoneCluster({
   isStore,
   showPitCounts,
 }: StoneClusterProps) {
+  if (isStore) {
+    return (
+      <span
+        className={
+          'absolute inset-0 flex items-center justify-center z-10 ' +
+          'font-display font-semibold text-display-md md:text-display-lg ' +
+          'drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)] text-stone pointer-events-none'
+        }
+        style={mirror ? { transform: 'rotate(180deg)' } : undefined}
+      >
+        {count}
+      </span>
+    )
+  }
+
   const visibleCount = Math.min(count, MAX_VISIBLE_STONES)
   const overflow = count > MAX_VISIBLE_STONES
 
@@ -108,28 +123,18 @@ function StoneCluster({
         )
       })}
 
-      {overflow && !isStore && (
+      {overflow && (
         <div className="absolute bottom-1 left-1/2 -translate-x-1/2 z-10">
           <Chip className="text-[10px] px-1.5 py-0.5">{count}</Chip>
         </div>
       )}
 
-      {isStore && (
+      {showPitCounts && !overflow && (
         <span
           className={
-            'absolute inset-0 flex items-center justify-center z-10 ' +
-            'font-display font-semibold text-display-md md:text-display-lg ' +
-            'drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)] text-stone pointer-events-none'
+            'absolute bottom-1 right-1.5 z-10 pointer-events-none ' +
+            'font-body text-label font-semibold text-muted'
           }
-          style={mirror ? { transform: 'rotate(180deg)' } : undefined}
-        >
-          {count}
-        </span>
-      )}
-
-      {showPitCounts && !isStore && !overflow && (
-        <span
-          className="absolute bottom-0.5 right-1 text-[10px] md:text-[11px] font-bold text-stone/90 leading-none pointer-events-none z-10"
           style={mirror ? { transform: 'rotate(180deg)' } : undefined}
         >
           {count}
@@ -406,8 +411,8 @@ function BoardInner({
       ref={boardRef}
       className="relative w-full max-w-xl mx-auto"
     >
-      <div className="board-slab p-2.5 md:p-3">
-        <div className="flex flex-col md:flex-row items-center gap-2 md:gap-3">
+      <div className="board-slab flex items-center justify-center p-3 md:p-4">
+        <div className="flex flex-col md:flex-row items-center gap-2 md:gap-3 w-full">
           {renderStore(leftStore, animPhase !== 'idle' && leftStore === ownStore)}
 
           <div className="flex flex-col gap-2 md:gap-3 flex-1 w-full">
