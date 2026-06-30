@@ -86,6 +86,11 @@ export async function requestBotMove(
   })
 
   const cancel = () => {
+    const entry = pending.get(requestId)
+    if (entry) {
+      pending.delete(requestId)
+      entry.reject(new Error('Bot request cancelled'))
+    }
     w.postMessage({
       type: 'cancel',
       requestId,

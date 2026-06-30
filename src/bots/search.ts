@@ -126,7 +126,7 @@ function orderMoves(
 
 // ── Quiescence Search ────────────────────────────────────────────────────
 
-const MAX_QDEPTH = 3
+const MAX_QDEPTH = 5
 
 function quiesce(
   state: GameState,

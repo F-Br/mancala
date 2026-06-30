@@ -85,6 +85,11 @@ export async function requestAnalysis(
   })
 
   const cancel = () => {
+    const entry = pending.get(requestId)
+    if (entry) {
+      pending.delete(requestId)
+      entry.reject(new Error('Analysis request cancelled'))
+    }
     w.postMessage({
       type: 'cancel',
       requestId,

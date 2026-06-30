@@ -280,7 +280,7 @@ export function GameScreen() {
     }
 
     if (isVsBot && newState.currentPlayer !== humanSide) {
-      doBotMove(newState)
+      if (!botInFlight.current) doBotMove(newState)
     }
   }, [isVsBot, humanSide, doBotMove, soundEnabled, hapticsEnabled])
 

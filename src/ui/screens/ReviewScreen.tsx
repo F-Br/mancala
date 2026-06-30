@@ -118,7 +118,7 @@ export function ReviewScreen() {
   const showPitCounts = useSettingsStore((s) => s.showPitCounts)
 
   const [analyzing, setAnalyzing] = useState(false)
-  const [progress, setProgress] = useState({ current: 0, total: 0 })
+  const [progress, setProgress] = useState({ current: 0, total: 0, remaining: 0 })
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showPV, setShowPV] = useState(false)
   const [pvStep, setPvStep] = useState(0)
@@ -152,11 +152,12 @@ export function ReviewScreen() {
     if (!gameState || positions.length <= 1) return
     const moveCount = gameState.moveHistory.length
     setAnalyzing(true)
-    setProgress({ current: 0, total: moveCount })
+    setProgress({ current: 0, total: moveCount, remaining: 0 })
 
     const entries: AnalysisCacheEntry[] = []
 
-    for (let i = 0; i < moveCount; i++) {
+      const startTime = performance.now()
+      for (let i = 0; i < moveCount; i++) {
       const pos = positions[i]
       if (!pos || !pos.move || pos.state.status !== 'in-progress') {
         entries.push({
@@ -167,15 +168,20 @@ export function ReviewScreen() {
           playedEval: 0,
           rootScores: {},
         })
-        setProgress({ current: i + 1, total: moveCount })
+        setProgress({ current: i + 1, total: moveCount, remaining: 0 })
         continue
       }
 
+      let remaining = 0
       try {
-        const handle = await requestAnalysis(pos.state, 1000)
+        const handle = await requestAnalysis(pos.state, 5000)
         analysisRef.current = handle
         const result = await handle.promise
         analysisRef.current = null
+
+        const elapsed = performance.now() - startTime
+        const avgMsPerPos = elapsed / (i + 1)
+        remaining = Math.round((moveCount - i - 1) * avgMsPerPos / 1000)
 
         const rootScores = result.rootScores ?? {}
         const playedMove = pos.move
@@ -228,7 +234,7 @@ export function ReviewScreen() {
         })
       }
 
-      setProgress({ current: i + 1, total: moveCount })
+      setProgress({ current: i + 1, total: moveCount, remaining })
     }
 
     setLocalCache(entries)
@@ -551,6 +557,11 @@ export function ReviewScreen() {
           </div>
           <p className="text-xs text-muted">
             {strings.review.progress(progress.current, progress.total)}
+            {progress.remaining > 30 && (
+              <span className="ml-2">
+                &middot; ~{Math.floor(progress.remaining / 60)}m{String(progress.remaining % 60).padStart(2, '0')}s
+              </span>
+            )}
           </p>
         </div>
       )}

@@ -71,6 +71,20 @@ export const useGameStore = create<GameStore>()(
     }),
     {
       name: 'mancala-current-game',
+      version: 1,
+      merge: (persisted, current) => ({
+        ...current,
+        ...(typeof persisted === 'object' && persisted
+          ? Object.fromEntries(
+              Object.entries(persisted as Record<string, unknown>).filter(
+                ([key]) => key in current,
+              ),
+            )
+          : {}),
+      }),
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('Failed to load game state from localStorage:', error)
+      },
       partialize: (state) => ({
         gameState: state.gameState,
         rules: state.rules,
