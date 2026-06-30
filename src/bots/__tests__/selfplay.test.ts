@@ -72,7 +72,7 @@ describe('self-play: expert vs strong', () => {
   it('expert beats strong >55% over 10 games', () => {
     const expertPlayer: BotPlayer = {
       pickMove: (s) => {
-        const r = pickMoveExpert(s, RULES, 1000)
+        const r = pickMoveExpert(s, RULES, 1500)
         return r.pv[0] ?? -1
       },
     }

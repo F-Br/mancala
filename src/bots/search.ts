@@ -117,6 +117,10 @@ export class TranspositionTable {
   }
 }
 
+// ── Extra-Turn Chain Safety ──────────────────────────────────────────────
+
+const MAX_EXTRA_TURN_CHAIN = 30
+
 // ── Move Ordering ────────────────────────────────────────────────────────
 
 function orderMoves(
@@ -229,6 +233,7 @@ function minimax(
   rootScores?: Record<number, number>,
   quiesceDepth?: number,
   ply = 0,
+  extraTurnChain = 0,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
   if (state.status === 'finished') {
@@ -254,8 +259,13 @@ function minimax(
     if (cancelSignal?.cancelled) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
-    const result = minimax(child, depth - 1, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1)
-    const score = childMove?.wasExtraTurn ? result.score : -result.score
+    const isExtra = childMove?.wasExtraTurn && extraTurnChain < MAX_EXTRA_TURN_CHAIN
+    const nextDepth = isExtra ? depth : depth - 1
+    const nextChain = isExtra ? extraTurnChain + 1 : 0
+    const result = isExtra
+      ? minimax(child, nextDepth, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain)
+      : minimax(child, nextDepth, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, 0)
+    const score = isExtra ? result.score : -result.score
 
     if (rootScores !== undefined) {
       rootScores[pit] = score
@@ -281,6 +291,7 @@ function minimaxWithAB(
   rootScores?: Record<number, number>,
   quiesceDepth?: number,
   ply = 0,
+  extraTurnChain = 0,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
   if (state.status === 'finished') {
@@ -306,10 +317,13 @@ function minimaxWithAB(
     if (cancelSignal?.cancelled) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
-    const result = childMove?.wasExtraTurn
-      ? minimaxWithAB(child, depth - 1, alpha, beta, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1)
-      : minimaxWithAB(child, depth - 1, -beta, -alpha, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1)
-    const score = childMove?.wasExtraTurn ? result.score : -result.score
+    const isExtra = childMove?.wasExtraTurn && extraTurnChain < MAX_EXTRA_TURN_CHAIN
+    const nextDepth = isExtra ? depth : depth - 1
+    const nextChain = isExtra ? extraTurnChain + 1 : 0
+    const result = isExtra
+      ? minimaxWithAB(child, nextDepth, alpha, beta, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain)
+      : minimaxWithAB(child, nextDepth, -beta, -alpha, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, 0)
+    const score = isExtra ? result.score : -result.score
 
     if (rootScores !== undefined) {
       rootScores[pit] = score
@@ -339,6 +353,7 @@ function minimaxWithABTT(
   rootScores?: Record<number, number>,
   quiesceDepth?: number,
   ply = 0,
+  extraTurnChain = 0,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
 
@@ -393,10 +408,13 @@ function minimaxWithABTT(
     if (cancelSignal?.cancelled) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
-    const result = childMove?.wasExtraTurn
-      ? minimaxWithABTT(child, depth - 1, alpha, beta, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1)
-      : minimaxWithABTT(child, depth - 1, -beta, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1)
-    const score = childMove?.wasExtraTurn ? result.score : -result.score
+    const isExtra = childMove?.wasExtraTurn && extraTurnChain < MAX_EXTRA_TURN_CHAIN
+    const nextDepth = isExtra ? depth : depth - 1
+    const nextChain = isExtra ? extraTurnChain + 1 : 0
+    const result = isExtra
+      ? minimaxWithABTT(child, nextDepth, alpha, beta, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain)
+      : minimaxWithABTT(child, nextDepth, -beta, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, 0)
+    const score = isExtra ? result.score : -result.score
 
     if (rootScores !== undefined) {
       rootScores[pit] = score
@@ -430,6 +448,12 @@ function minimaxWithABTT(
 
 // ── Iterative Deepening (synchronous, called between async yields) ──────
 
+const ASPIRATION_WINDOW = 5.0
+
+function isInMateBand(score: number): boolean {
+  return Math.abs(score) >= WIN_SCORE - MAX_PLY
+}
+
 export function iterativeDeepening(
   state: GameState,
   timeBudgetMs: number,
@@ -441,21 +465,36 @@ export function iterativeDeepening(
 ): IterativeResult {
   const startTime = performance.now()
   let bestResult: IterativeResult = { score: 0, pv: [], depth: 0, rootScores: {} }
+  let prevScore: number | null = null
 
   for (let depth = 1; ; depth++) {
     if (cancelSignal?.cancelled) break
     if (performance.now() - startTime >= timeBudgetMs) break
 
     const rootScores: Record<number, number> = {}
+    const useAspiration = prevScore !== null && !isInMateBand(prevScore)
+    const alpha = useAspiration ? prevScore! - ASPIRATION_WINDOW : -Infinity
+    const beta = useAspiration ? prevScore! + ASPIRATION_WINDOW : +Infinity
+
     let result: SearchResult
     if (tt) {
-      result = minimaxWithABTT(state, depth, -Infinity, +Infinity, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth)
+      result = minimaxWithABTT(state, depth, alpha, beta, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth)
     } else {
-      result = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal, rootScores, quiesceDepth)
+      result = minimaxWithAB(state, depth, alpha, beta, rules, evalFn, cancelSignal, rootScores, quiesceDepth)
     }
 
     if (cancelSignal?.cancelled) break
 
+    if (useAspiration && (result.score <= alpha || result.score >= beta)) {
+      if (tt) {
+        result = minimaxWithABTT(state, depth, -Infinity, +Infinity, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth)
+      } else {
+        result = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal, rootScores, quiesceDepth)
+      }
+      if (cancelSignal?.cancelled) break
+    }
+
+    prevScore = result.score
     bestResult = { score: result.score, pv: result.pv, depth, rootScores }
 
     if (bestResult.score > WIN_SCORE - MAX_PLY) break

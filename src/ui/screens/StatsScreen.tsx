@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useHistoryStore } from '../../state/historyStore'
 import type { BotLevel } from '../../bots/types'
 import type { ClassificationKey } from '../theme'
+import { classifyEvalDrop } from '../classification'
 import { strings } from '../strings'
 import { Card } from '../components/Card'
 import { PageLayout } from '../components/PageLayout'
@@ -11,14 +12,6 @@ interface BotStats {
   wins: number
   losses: number
   draws: number
-}
-
-function classifyEvalDrop(drop: number): ClassificationKey {
-  if (drop <= 0.3) return 'excellent'
-  if (drop <= 1.0) return 'good'
-  if (drop <= 2.0) return 'inaccuracy'
-  if (drop <= 4.0) return 'mistake'
-  return 'blunder'
 }
 
 const labelOrder: ClassificationKey[] = [
@@ -71,8 +64,7 @@ export function StatsScreen() {
       for (const entry of r.analysisResult) {
         if (entry.bestPitIndex < 0) continue
         const isBest = entry.playedEval >= entry.bestEval - 0.01
-        const drop = isBest ? 0 : Math.max(0, entry.bestEval - entry.playedEval)
-        const cls = isBest ? 'best' : classifyEvalDrop(drop)
+        const cls = isBest ? 'best' : classifyEvalDrop(entry.bestEval, entry.playedEval)
         classCounts[cls] = (classCounts[cls] ?? 0) + 1
         totalClassified++
         if (isBest) gameBest++

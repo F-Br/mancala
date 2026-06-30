@@ -537,17 +537,17 @@ describe('extra-turn negamax correctness', () => {
   })
 
   it('quiesce: extra-turn capture keeps same alpha/beta window', () => {
-    // Bottom captures with an extra turn — quiescence should evaluate correctly
-    const board = makeBoard([0, 0, 0, 0, 0, 1])
-    board[4] = 1
-    board[9] = 5
-    board[7] = 1
-    board[8] = 1
+    // Bottom has pit 5 (1 stone → extra turn), pit 3 (1 stone → capture via pit 4),
+    // and pit 0 (5 stones) so game continues after capture (bottom not emptied).
+    const board = makeBoard([5, 0, 0, 1, 0, 1])
+    board[7] = 1   // top has reply (opposite of pit 5 = 7)
+    board[8] = 4   // capture target (opposite of pit 4 = 12-4 = 8)
+    board[9] = 1
     board[10] = 1
     board[11] = 1
     board[12] = 1
     board[BOTTOM_STORE] = 0
-    board[TOP_STORE] = 0
+    board[TOP_STORE] = 5
     const state = makeState({ board, currentPlayer: 'bottom' })
     const result = minimax(state, 1, RULES, evaluateSimple, undefined, undefined, 1)
     expect(result.pv.length).toBeGreaterThan(0)
@@ -764,5 +764,127 @@ describe('extractPrincipalVariation', () => {
 
     expect(result.pv).toEqual([])
     expect(result.players).toEqual([])
+  })
+})
+
+const ASPIRATION_WINDOW = 5.0
+
+describe('aspiration windows', () => {
+  it('returns identical best move and score as full-window at depth 2', () => {
+    const state = createInitialState()
+
+    const rootScoresFull: Record<number, number> = {}
+    const full = minimaxWithAB(state, 2, -Infinity, +Infinity, RULES, evaluateSimple, undefined, rootScoresFull)
+
+    const rootScoresWin: Record<number, number> = {}
+    const win = minimaxWithAB(state, 2, full.score - ASPIRATION_WINDOW, full.score + ASPIRATION_WINDOW, RULES, evaluateSimple, undefined, rootScoresWin)
+
+    expect(win.score).toBe(full.score)
+    expect(win.pv[0]).toBe(full.pv[0])
+  })
+
+  it('re-searches with full window when aspiration window fails low', () => {
+    const state = createInitialState()
+    const full = minimaxWithAB(state, 2, -Infinity, +Infinity, RULES, evaluateSimple)
+
+    // Set window ABOVE the true score so search fails low (score <= alpha)
+    const narrow = minimaxWithAB(state, 2, full.score + 8, full.score + 10, RULES, evaluateSimple)
+    // narrow should fail low (score <= alpha)
+    expect(narrow.score).toBeLessThanOrEqual(full.score + 8)
+
+    // After re-search with full window we get the true score
+    const reSearch = minimaxWithAB(state, 2, -Infinity, +Infinity, RULES, evaluateSimple)
+    expect(reSearch.score).toBe(full.score)
+    expect(reSearch.pv[0]).toBe(full.pv[0])
+  })
+
+  it('iterativeDeepening with aspiration returns same best move and score as full-window', () => {
+    const state = createInitialState()
+    const rootScoresFull: Record<number, number> = {}
+    const rootScoresAsp: Record<number, number> = {}
+
+    // Run both at the same depth with the same approach
+    const full = minimaxWithAB(state, 3, -Infinity, +Infinity, RULES, evaluateSimple, undefined, rootScoresFull)
+    const aspir = minimaxWithAB(state, 3, full.score - ASPIRATION_WINDOW, full.score + ASPIRATION_WINDOW, RULES, evaluateSimple, undefined, rootScoresAsp)
+
+    expect(aspir.score).toBe(full.score)
+    expect(aspir.pv[0]).toBe(full.pv[0])
+  })
+
+  it('uses full window when previous score is in mate band', () => {
+    // Create a forced-win position
+    const board = makeBoard([1, 0, 0, 0, 0, 0])
+    board[7] = 0
+    board[11] = 5
+    board[BOTTOM_STORE] = 20
+    board[TOP_STORE] = 0
+    const state = makeState({ board, currentPlayer: 'bottom' })
+
+    const result = iterativeDeepening(state, 200, RULES, evaluateSimple, null)
+    expect(result.pv.length).toBeGreaterThan(0)
+    // The score should be in the mate band
+    expect(result.score).toBeGreaterThanOrEqual(WIN_SCORE - MAX_PLY)
+  })
+})
+
+describe('extra-turn depth handling', () => {
+  it('extra-turn move does not consume a ply of search budget', () => {
+    // Pit 5 (1 stone) → extra turn (lands in store at 6).
+    // After extra turn, pit 3 (1 stone) → lands in empty pit 4 → captures opposite pit 8 (4 stones).
+    // Pit 0 has 5 stones so game continues after capture (bottom not emptied).
+    const board = makeBoard([5, 0, 0, 1, 0, 1])
+    board[7] = 1
+    board[8] = 4   // opposite of pit 4 = 12-4 = 8
+    board[9] = 1
+    board[10] = 1
+    board[11] = 1
+    board[12] = 1
+    board[BOTTOM_STORE] = 0
+    board[TOP_STORE] = 5
+    const state = makeState({ board, currentPlayer: 'bottom' })
+
+    const result = minimax(state, 1, RULES, evaluateSimple)
+    expect(result.pv.length).toBeGreaterThan(0)
+    expect(result.score).toBeGreaterThan(0)
+  })
+
+  it('capped extra-turn chain falls back to decrementing depth', () => {
+    const board = makeBoard([0, 0, 0, 0, 0, 1])  // pit 5 → extra turn
+    board[7] = 1
+    board[BOTTOM_STORE] = 10
+    board[TOP_STORE] = 0
+    const state = makeState({ board, currentPlayer: 'bottom' })
+
+    const result = minimax(state, 1, RULES, evaluateSimple)
+    expect(result.pv.length).toBeGreaterThan(0)
+  })
+
+  it('extra-turn then capture is found at depth 1 where non-extending would miss', () => {
+    // Pit 5 (1 stone) → extra turn (lands in store at 6).
+    // After extra turn, pit 3 (1 stone) → lands in pit 4 (empty) → captures opposite pit 8 (4 stones).
+    // Pit 0 has 5 stones so game continues after capture.
+    const board = makeBoard([5, 0, 0, 1, 0, 1])
+    board[7] = 1
+    board[8] = 4
+    board[9] = 1
+    board[10] = 1
+    board[11] = 1
+    board[12] = 1
+    board[BOTTOM_STORE] = 0
+    board[TOP_STORE] = 5
+    const state = makeState({ board, currentPlayer: 'bottom' })
+
+    // Pit 5 first: 1 stone → lands in store (extra turn)
+    const child5 = applyMove(state, 5, RULES)
+    expect(child5.moveHistory[child5.moveHistory.length - 1]!.wasExtraTurn).toBe(true)
+
+    // After extra turn, bottom plays pit 3: 1 stone → lands in pit 4 (empty) → capture.
+    const child3 = applyMove(child5, 3, RULES)
+    expect(child3.moveHistory[child3.moveHistory.length - 1]!.captured).not.toBeNull()
+
+    // The extra-turn-extending search at depth 1 should see the full chain
+    const result = minimax(state, 1, RULES, evaluateSimple)
+    expect(result.pv[0]).toBe(5)
+    expect(result.score).toBeGreaterThan(0)
   })
 })

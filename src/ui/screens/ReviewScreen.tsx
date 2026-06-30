@@ -11,6 +11,7 @@ import { useModeStore } from '../../state/modeStore'
 import { useSettingsStore } from '../../state/settingsStore'
 import { useHistoryStore } from '../../state/historyStore'
 import { classificationColors, type ClassificationKey } from '../theme'
+import { classifyEvalDrop } from '../classification'
 import { shareGame } from '../share'
 import { gameToText } from '../../engine'
 import { strings } from '../strings'
@@ -18,14 +19,6 @@ import { Board } from '../components/Board'
 import { Chip } from '../components/Chip'
 import { ScorePanel } from '../components/ScorePanel'
 import { EvalGraph, type EvalGraphPoint } from '../components/EvalGraph'
-
-function classifyEvalDrop(drop: number): ClassificationKey {
-  if (drop <= 0.3) return 'excellent'
-  if (drop <= 1.0) return 'good'
-  if (drop <= 2.0) return 'inaccuracy'
-  if (drop <= 4.0) return 'mistake'
-  return 'blunder'
-}
 
 const classificationLabel: Record<ClassificationKey, string> = {
   best: strings.review.best,
@@ -439,7 +432,7 @@ export function ReviewScreen() {
       ? classificationColors[
           currentEntry.bestPitIndex === currentPos?.move?.pitIndex
             ? 'best'
-            : classifyEvalDrop(currentEntry.bestEval - currentEntry.playedEval)
+            : classifyEvalDrop(currentEntry.bestEval, currentEntry.playedEval)
         ]
       : undefined
 
@@ -717,7 +710,7 @@ export function ReviewScreen() {
                   {currentEntry.playedEval < currentEntry.bestEval - 0.01 && (
                     <span
                       className="text-[11px] font-medium"
-                      style={{ color: classificationColors[classifyEvalDrop(currentEntry.bestEval - currentEntry.playedEval)] }}
+                      style={{ color: classificationColors[classifyEvalDrop(currentEntry.bestEval, currentEntry.playedEval)] }}
                     >
                       {(currentEntry.playedEval - currentEntry.bestEval).toFixed(1)}
                     </span>
@@ -815,8 +808,8 @@ function MoveListPanel({
         const playedMove = pos.move!
         const index = pos.index
         const isBest = playedMove.pitIndex === entry.bestPitIndex
-        const evalDrop = isBest ? 0 : Math.max(0, entry.bestEval - entry.playedEval)
-        const cls = isBest ? 'best' : classifyEvalDrop(evalDrop)
+        const evalDrop = Math.max(0, entry.bestEval - entry.playedEval)
+        const cls = isBest ? 'best' : classifyEvalDrop(entry.bestEval, entry.playedEval)
         const color = classificationColors[cls]
 
         const playedNotation = notatePit(playedMove.pitIndex)

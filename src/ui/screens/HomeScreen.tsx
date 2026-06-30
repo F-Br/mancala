@@ -6,16 +6,8 @@ import { useHistoryStore } from '../../state/historyStore'
 import { InstallPrompt } from '../components/InstallPrompt'
 import { Card } from '../components/Card'
 import { strings } from '../strings'
-import type { ClassificationKey } from '../theme'
+import { classifyEvalDrop } from '../classification'
 import { Play, Bot, Users, Clock, BarChart3, Settings, ArrowRight } from 'lucide-react'
-
-function classifyEvalDrop(drop: number): ClassificationKey {
-  if (drop <= 0.3) return 'excellent'
-  if (drop <= 1.0) return 'good'
-  if (drop <= 2.0) return 'inaccuracy'
-  if (drop <= 4.0) return 'mistake'
-  return 'blunder'
-}
 
 function StoneCluster({ className = '' }: { className?: string }) {
   return (
@@ -44,8 +36,7 @@ export function HomeScreen() {
       for (const entry of r.analysisResult) {
         if (entry.bestPitIndex < 0) continue
         const isBest = entry.playedEval >= entry.bestEval - 0.01
-        const drop = isBest ? 0 : Math.max(0, entry.bestEval - entry.playedEval)
-        const cls = isBest ? 'best' : classifyEvalDrop(drop)
+        const cls = isBest ? 'best' : classifyEvalDrop(entry.bestEval, entry.playedEval)
         totalClassified++
         if (cls === 'best') bestMoves++
       }
