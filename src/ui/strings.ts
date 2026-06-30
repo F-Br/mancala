@@ -10,11 +10,17 @@ export const strings = {
   },
   home: {
     playVsBot: 'Play vs Bot',
+    playVsBotDesc: 'Challenge the AI at your chosen level',
     local2Player: 'Local 2-Player',
+    local2PlayerDesc: 'Pass-and-play with a friend',
     gameHistory: 'Game History',
     settings: 'Settings',
     resumeGame: 'Resume Game',
+    resumePlaying: 'Continue playing',
+    resumeFinished: 'Game over \u2014 review',
     statistics: 'Statistics',
+    bestMoves: 'Best Moves',
+    noGames: 'No games yet',
   },
   botSelect: {
     title: 'Bot Setup',
