@@ -1,8 +1,10 @@
 import type { GameState, RuleConfig, Side } from '../engine'
 import { BOTTOM_STORE, TOP_STORE, BOARD_LENGTH } from '../engine'
-import { legalMoves, applyMove, cloneState } from '../engine'
+import { legalMoves, applyMove, cloneState, extractPits, countPitStones, encodeProven } from '../engine'
 import type { EvaluationFn } from './evaluation'
 import { evaluateSimple, evaluateStrong, evaluateExpert, WIN_SCORE, MAX_PLY } from './evaluation'
+
+export type TablebaseProbe = (state: GameState) => number | undefined
 
 export interface CancelSignal {
   cancelled: boolean
@@ -184,6 +186,7 @@ function quiesce(
   cancelSignal?: CancelSignal,
   ply = 0,
   limits?: SearchLimits,
+  tablebase?: TablebaseProbe,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
   if (limits) {
@@ -194,6 +197,14 @@ function quiesce(
       return { score: NaN, pv: [] }
     }
   }
+
+  if (tablebase && state.status === 'in-progress') {
+    const tbScore = tablebase(state)
+    if (tbScore !== undefined) {
+      return { score: tbScore, pv: [] }
+    }
+  }
+
   if (state.status === 'finished') {
     const base = evalFn(state, rules)
     const score = adjustTerminalScore(base, ply)
@@ -210,8 +221,6 @@ function quiesce(
   const moves = legalMoves(state, rules)
   if (moves.length === 0) return { score: standPat, pv: [] }
 
-  // Quick check: if the current player has no empty pits, no capture is
-  // possible → skip the expensive loop entirely.
   const { pitsPerSide } = rules
   const ownStart = state.currentPlayer === 'bottom' ? 0 : pitsPerSide + 1
   const ownEnd = state.currentPlayer === 'bottom' ? pitsPerSide - 1 : pitsPerSide * 2
@@ -221,7 +230,6 @@ function quiesce(
   }
   if (!hasEmptyPit) return { score: standPat, pv: [] }
 
-  // No move ordering needed — captures are rare and stand-pat prunes well.
   let bestScore = standPat
   let bestPV: number[] = []
 
@@ -231,8 +239,8 @@ function quiesce(
     if (!lastMove?.captured) continue
 
     const result = lastMove?.wasExtraTurn
-      ? quiesce(child, qDepth + 1, alpha, beta, rules, evalFn, cancelSignal, ply + 1, limits)
-      : quiesce(child, qDepth + 1, -beta, -alpha, rules, evalFn, cancelSignal, ply + 1, limits)
+      ? quiesce(child, qDepth + 1, alpha, beta, rules, evalFn, cancelSignal, ply + 1, limits, tablebase)
+      : quiesce(child, qDepth + 1, -beta, -alpha, rules, evalFn, cancelSignal, ply + 1, limits, tablebase)
     if (limits?.aborted) break
     const score = lastMove?.wasExtraTurn ? result.score : -result.score
 
@@ -414,6 +422,7 @@ function minimaxWithABTT(
   extraTurnChain = 0,
   limits?: SearchLimits,
   maxExtraTurnExtension = ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION,
+  tablebase?: TablebaseProbe,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
   if (limits) {
@@ -422,6 +431,14 @@ function minimaxWithABTT(
     if (limits.deadlineMs !== null && limits.nodeCount % limits.checkInterval === 0 && performance.now() >= limits.deadlineMs) {
       limits.aborted = true
       return { score: NaN, pv: [] }
+    }
+  }
+
+  // Tablebase probe: exact score, no search needed
+  if (tablebase && state.status === 'in-progress') {
+    const tbScore = tablebase(state)
+    if (tbScore !== undefined) {
+      return { score: tbScore, pv: [] }
     }
   }
 
@@ -434,8 +451,6 @@ function minimaxWithABTT(
   let ttBestMove: number | undefined
 
   if (entry && entry.depth >= depth) {
-    // Don't return early on exact hits — we need the full PV.
-    // Instead use the TT bounds to tighten alpha/beta and for move ordering.
     if (entry.flag === 'exact' || entry.flag === 'lower') {
       if (entry.score > alpha) {
         alpha = entry.score
@@ -459,7 +474,7 @@ function minimaxWithABTT(
   }
   if (depth === 0) {
     return quiesceDepth && quiesceDepth > 0
-      ? quiesce(state, 0, alpha, beta, rules, evalFn, cancelSignal, ply, limits)
+      ? quiesce(state, 0, alpha, beta, rules, evalFn, cancelSignal, ply, limits, tablebase)
       : { score: evalFn(state, rules), pv: [] }
   }
 
@@ -481,8 +496,8 @@ function minimaxWithABTT(
     const nextDepth = isExtra ? depth : depth - 1
     const nextChain = isExtra ? extraTurnChain + 1 : 0
     const result = isExtra
-      ? minimaxWithABTT(child, nextDepth, alpha, beta, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits, maxExtraTurnExtension)
-      : minimaxWithABTT(child, nextDepth, -beta, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits, maxExtraTurnExtension)
+      ? minimaxWithABTT(child, nextDepth, alpha, beta, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits, maxExtraTurnExtension, tablebase)
+      : minimaxWithABTT(child, nextDepth, -beta, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits, maxExtraTurnExtension, tablebase)
     if (limits?.aborted) break
     const score = isExtra ? result.score : -result.score
 
@@ -501,7 +516,6 @@ function minimaxWithABTT(
 
   if (limits?.aborted) return { score: NaN, pv: [] }
 
-  // Store in TT — only if the search completed normally
   const bestMove = bestPV[0]
   if (bestMove !== undefined) {
     let flag: TTEntry['flag']
@@ -535,10 +549,19 @@ export function iterativeDeepening(
   cancelSignal?: CancelSignal,
   quiesceDepth?: number,
   maxDepth?: number,
+  tablebase?: TablebaseProbe,
 ): IterativeResult {
   const startTime = performance.now()
   let bestResult: IterativeResult = { score: 0, pv: [], depth: 0, rootScores: {} }
   let prevScore: number | null = null
+
+  // Tablebase probe: if position is in the table, return exact score immediately
+  if (tablebase && state.status === 'in-progress') {
+    const tbScore = tablebase(state)
+    if (tbScore !== undefined) {
+      return { score: tbScore, pv: [], depth: 0, rootScores: {} }
+    }
+  }
 
   const limits: SearchLimits = {
     deadlineMs: startTime + timeBudgetMs,
@@ -565,7 +588,7 @@ export function iterativeDeepening(
 
     let result: SearchResult
     if (tt) {
-      result = minimaxWithABTT(state, depth, alpha, beta, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits)
+      result = minimaxWithABTT(state, depth, alpha, beta, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits, ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION, tablebase)
     } else {
       result = minimaxWithAB(state, depth, alpha, beta, rules, evalFn, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits)
     }
@@ -580,7 +603,7 @@ export function iterativeDeepening(
     if (useAspiration && (result.score <= alpha || result.score >= beta)) {
       let reResult: SearchResult
       if (tt) {
-        reResult = minimaxWithABTT(state, depth, -Infinity, +Infinity, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits)
+        reResult = minimaxWithABTT(state, depth, -Infinity, +Infinity, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits, ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION, tablebase)
       } else {
         reResult = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits)
       }
@@ -695,6 +718,7 @@ export function extractPrincipalVariation(
   tt: TranspositionTable,
   evalFn: EvaluationFn,
   options: ExtractPVOptions = {},
+  tablebaseBestMove?: (state: GameState) => number | undefined,
 ): ExtractedPV {
   const {
     perStepBudgetMs = 250,
@@ -716,25 +740,36 @@ export function extractPrincipalVariation(
     const elapsed = performance.now() - totalStart
     if (elapsed >= totalBudgetMs) break
 
-    const stepBudget = Math.min(perStepBudgetMs, totalBudgetMs - elapsed)
-
-    const result = iterativeDeepening(
-      current,
-      stepBudget,
-      rules,
-      evalFn,
-      tt,
-      cancelSignal,
-      1,
-    )
-
-    if (cancelSignal?.cancelled) break
-
     const moves = legalMoves(current, rules)
+    if (moves.length === 0) break
     let chosenMove: number | undefined
 
-    if (result.pv[0] !== undefined && moves.includes(result.pv[0])) {
-      chosenMove = result.pv[0]
+    // Tablebase PV extraction: skip search, use TB argmax directly
+    if (tablebaseBestMove) {
+      const tbMove = tablebaseBestMove(current)
+      if (tbMove !== undefined && moves.includes(tbMove)) {
+        chosenMove = tbMove
+      }
+    }
+
+    if (chosenMove === undefined) {
+      const stepBudget = Math.min(perStepBudgetMs, totalBudgetMs - elapsed)
+
+      const result = iterativeDeepening(
+        current,
+        stepBudget,
+        rules,
+        evalFn,
+        tt,
+        cancelSignal,
+        1,
+      )
+
+      if (cancelSignal?.cancelled) break
+
+      if (result.pv[0] !== undefined && moves.includes(result.pv[0])) {
+        chosenMove = result.pv[0]
+      }
     }
 
     if (chosenMove === undefined) {

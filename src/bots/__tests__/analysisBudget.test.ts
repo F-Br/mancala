@@ -32,7 +32,7 @@ function createTestHarness(maxTTEntries?: number) {
         w.reject(new Error(msg.message))
       }
     }
-  }, maxTTEntries)
+  }, maxTTEntries, true)
 
   function analyze(
     state: GameState,

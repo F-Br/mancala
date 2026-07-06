@@ -1,18 +1,141 @@
 import type { GameState, RuleConfig } from '../engine'
-import { KALAH_STANDARD, legalMoves, applyMove } from '../engine'
-import { minimaxWithABTT, TranspositionTable, extractPrincipalVariation, iterativeDeepening, adjustTerminalScore } from './search'
-import type { CancelSignal, SearchLimits } from './search'
+import {
+  KALAH_STANDARD,
+  legalMoves,
+  applyMove,
+  generateTablebase,
+  createTablebaseProbe,
+  createTablebaseBestMove,
+  getOffsets,
+  getTotalSize,
+  encodeProven,
+  countPitStones,
+  extractPits,
+} from '../engine'
+import {
+  minimaxWithABTT,
+  TranspositionTable,
+  extractPrincipalVariation,
+  iterativeDeepening,
+  adjustTerminalScore,
+  ExtraTurnConfig,
+} from './search'
+import type { CancelSignal, SearchLimits, TablebaseProbe } from './search'
 import { evaluateExpert, WIN_SCORE } from './evaluation'
 import type { AnalysisMessage, AnalysisWorkerMessage, AnalysisRequest } from './types'
+import type { TbProgressMsg } from '../engine'
+
+const TB_K = 12
+const TB_RULES_VERSION = 'kalah-standard-v1'
+
+const IDB_NAME = 'mancala-tablebase'
+const IDB_STORE = 'tables'
+const IDB_KEY = `tb-k${TB_K}-${TB_RULES_VERSION}`
+
+function hasIDB(): boolean {
+  try {
+    return typeof indexedDB !== 'undefined' && typeof indexedDB.open === 'function'
+  } catch {
+    return false
+  }
+}
+
+function openIDB(): Promise<IDBDatabase> {
+  if (!hasIDB()) return Promise.reject(new Error('IndexedDB not available'))
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1)
+    req.onupgradeneeded = () => {
+      const db = req.result
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE)
+      }
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+    req.onblocked = () => reject(new Error('IDB blocked'))
+  })
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  const timer = new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))
+  return Promise.race([promise, timer])
+}
+
+function loadFromIDB(): Promise<Int8Array | null> {
+  if (!hasIDB()) return Promise.resolve(null)
+  return withTimeout(
+    openIDB()
+      .then((db) => {
+        return new Promise<Int8Array | null>((resolve, reject) => {
+          try {
+            const tx = db.transaction(IDB_STORE, 'readonly')
+            const store = tx.objectStore(IDB_STORE)
+            const req = store.get(IDB_KEY)
+            req.onsuccess = () => {
+              const val = req.result
+              if (val instanceof Int8Array) {
+                resolve(val)
+              } else if (val && val.buffer instanceof ArrayBuffer) {
+                resolve(new Int8Array(val.buffer))
+              } else {
+                resolve(null)
+              }
+            }
+            req.onerror = () => reject(req.error)
+          } catch (e) {
+            reject(e)
+          }
+        })
+      })
+      .catch(() => null),
+    3000,
+    null,
+  )
+}
+
+function saveToIDB(table: Int8Array): Promise<void> {
+  if (!hasIDB()) return Promise.resolve()
+  return withTimeout(
+    openIDB()
+      .then((db) => {
+        return new Promise<void>((resolve, reject) => {
+          try {
+            const tx = db.transaction(IDB_STORE, 'readwrite')
+            const store = tx.objectStore(IDB_STORE)
+            store.put(table, IDB_KEY)
+            tx.oncomplete = () => resolve()
+            tx.onerror = () => reject(tx.error)
+          } catch (e) {
+            reject(e)
+          }
+        })
+      })
+      .catch(() => {}),
+    3000,
+  )
+}
 
 export class AnalysisWorkerHandler {
   private currentCancel: CancelSignal | null = null
   private sharedTT: TranspositionTable
-  private readonly postMsg: (msg: AnalysisWorkerMessage) => void
+  private readonly postMsg: (msg: AnalysisWorkerMessage | TbProgressMsg) => void
+  private table: Int8Array | null = null
+  private offsets: number[] | null = null
+  private probe: TablebaseProbe | null = null
+  private tbBestMove: ((state: GameState) => number | undefined) | null = null
+  private tbReady = false
+  private tbInitStarted = false
 
-  constructor(postMsg: (msg: AnalysisWorkerMessage) => void, maxTTEntries?: number) {
+  constructor(
+    postMsg: (msg: AnalysisWorkerMessage | TbProgressMsg) => void,
+    maxTTEntries?: number,
+    skipTablebase = false,
+  ) {
     this.postMsg = postMsg
     this.sharedTT = new TranspositionTable(maxTTEntries)
+    if (skipTablebase) {
+      this.tbInitStarted = true
+    }
   }
 
   handleMessage(msg: AnalysisMessage): void {
@@ -24,8 +147,81 @@ export class AnalysisWorkerHandler {
     }
 
     if (msg.type === 'analyze') {
+      this.ensureTablebaseInit()
       this.handleAnalyze(msg)
     }
+  }
+
+  private ensureTablebaseInit(): void {
+    if (this.tbInitStarted) return
+    this.tbInitStarted = true
+    this.initTablebase()
+  }
+
+  private async initTablebase(): Promise<void> {
+    try {
+      const cached = await loadFromIDB()
+      if (cached && cached.length === getTotalSize(TB_K)) {
+        this.table = cached
+        this.offsets = getOffsets(TB_K)
+        this.setupProbes()
+        this.tbReady = true
+        return
+      }
+    } catch {
+      // IndexedDB unavailable or corrupt — generate fresh
+    }
+
+    try {
+      const { table, nonProbeableCount } = generateTablebase(
+        TB_K,
+        KALAH_STANDARD,
+        (msg: TbProgressMsg) => {
+          this.postMsg(msg)
+        },
+      )
+
+      this.table = table
+      this.offsets = getOffsets(TB_K)
+      this.setupProbes()
+      this.tbReady = true
+
+      if (nonProbeableCount > 0) {
+        console.warn(
+          `Tablebase generation: ${nonProbeableCount} non-probeable entries at K=${TB_K}`,
+        )
+      }
+
+      saveToIDB(table).catch(() => {})
+    } catch (err) {
+      console.error('Tablebase generation failed:', err)
+      // Continue without tablebase — search works normally
+    }
+  }
+
+  private setupProbes(): void {
+    if (!this.table || !this.offsets) return
+
+    const probeFn = createTablebaseProbe(this.table, this.offsets, TB_K)
+
+    this.probe = (state: GameState): number | undefined => {
+      if (state.status !== 'in-progress') return undefined
+      const pits = extractPits(state.board)
+      const tb = probeFn(pits, state.currentPlayer)
+      if (tb === undefined) return undefined
+
+      const ownStore = state.currentPlayer === 'bottom' ? 6 : 13
+      const oppStore = state.currentPlayer === 'bottom' ? 13 : 6
+      const sd = (state.board[ownStore] ?? 0) - (state.board[oppStore] ?? 0)
+      return encodeProven(sd + tb)
+    }
+
+    this.tbBestMove = createTablebaseBestMove(
+      this.table,
+      this.offsets,
+      TB_K,
+      KALAH_STANDARD,
+    )
   }
 
   private handleAnalyze(msg: AnalysisRequest): void {
@@ -40,7 +236,14 @@ export class AnalysisWorkerHandler {
     const rules = KALAH_STANDARD
 
     try {
-      this.runExpertSearch(state, timeBudgetMs, rules, requestId, cancelSignal, playedPitIndex)
+      this.runExpertSearch(
+        state,
+        timeBudgetMs,
+        rules,
+        requestId,
+        cancelSignal,
+        playedPitIndex,
+      )
     } catch (err) {
       this.postMsg({
         type: 'error',
@@ -72,7 +275,12 @@ export class AnalysisWorkerHandler {
       checkInterval: 2048,
     }
 
-    let bestResult = { score: 0, pv: [] as number[], depth: 0, rootScores: {} as Record<number, number> }
+    let bestResult = {
+      score: 0,
+      pv: [] as number[],
+      depth: 0,
+      rootScores: {} as Record<number, number>,
+    }
     let depth = 1
 
     const sendBestResult = (): void => {
@@ -97,6 +305,7 @@ export class AnalysisWorkerHandler {
           tt,
           evalFn,
           { cancelSignal },
+          this.tbReady ? this.tbBestMove ?? undefined : undefined,
         )
         if (extracted.pv.length > 0) {
           bestResult = { ...bestResult, pv: extracted.pv }
@@ -116,7 +325,13 @@ export class AnalysisWorkerHandler {
         if (moves.includes(playedPitIndex)) {
           try {
             exactPlayedEval = this.computeExactPlayedEval(
-              state, playedPitIndex, timeBudgetMs, rules, evalFn, tt, cancelSignal,
+              state,
+              playedPitIndex,
+              timeBudgetMs,
+              rules,
+              evalFn,
+              tt,
+              cancelSignal,
             )
           } catch {
             // Verification failed — leave exactPlayedEval undefined
@@ -167,6 +382,8 @@ export class AnalysisWorkerHandler {
         0,
         0,
         depth === 1 ? undefined : limits,
+        ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION,
+        this.probe ?? undefined,
       )
 
       if (cancelSignal.cancelled) {
@@ -206,9 +423,10 @@ export class AnalysisWorkerHandler {
 
     if (childState.status === 'finished') {
       const base = evalFn(childState, rules)
-      childScore = base === WIN_SCORE || base === -WIN_SCORE
-        ? adjustTerminalScore(base, 1)
-        : base
+      childScore =
+        base === WIN_SCORE || base === -WIN_SCORE
+          ? adjustTerminalScore(base, 1)
+          : base
     } else {
       const idResult = iterativeDeepening(
         childState,
@@ -218,6 +436,8 @@ export class AnalysisWorkerHandler {
         tt,
         cancelSignal,
         1,
+        undefined,
+        this.probe ?? undefined,
       )
       childScore = idResult.score
     }
@@ -228,7 +448,14 @@ export class AnalysisWorkerHandler {
 
 // Self-hosted worker entry
 if (typeof self !== 'undefined' && typeof self.postMessage === 'function') {
-  const handler = new AnalysisWorkerHandler((msg) => self.postMessage(msg))
+  const postMsg = (msg: AnalysisWorkerMessage | TbProgressMsg) => {
+    try {
+      self.postMessage(msg)
+    } catch {
+      self.postMessage(msg as unknown as MessageEvent, '*')
+    }
+  }
+  const handler = new AnalysisWorkerHandler(postMsg)
   self.onmessage = (event: MessageEvent<AnalysisMessage>) => {
     handler.handleMessage(event.data)
   }
