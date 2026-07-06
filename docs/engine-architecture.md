@@ -1,7 +1,6 @@
 # Mancala Engine Architecture (current state)
 
-> Generated from commit `7686275` (HEAD), 2026-07-06.
-> Describes the code exactly as it exists; does not prescribe changes.
+> Generated from commits `7686275` through current. Describes the code exactly as it exists; does not prescribe changes.
 
 ---
 
@@ -102,7 +101,7 @@ const nextChain = isExtra ? extraTurnChain + 1 : 0
 - **Extra-turn moves do NOT decrement the search depth** (until the chain counter `extraTurnChain` reaches `MAX_EXTRA_TURN_EXTENSION = 3`).
 - **Extra-turn scores are NOT negated** (the node is `maximizing-only` for the same player).
 - **No change to alpha/beta window** on extra turns (same `alpha, beta` passed as-in).
-- The chain cap of 3 is a safety valve: if 3 consecutive extra turns occur, depth finally decrements.
+- The chain cap of 3 is a safety valve: if 3 consecutive extra turns occur, depth finally decrements. This bounds the extra-turn search explosion that would otherwise cause multi-minute hangs.
 
 ### Mate-distance handling
 - Terminal positions call `evalFn` (which returns ±WIN_SCORE or 0), then `adjustTerminalScore` subtracts/adds `ply` to produce `WIN_SCORE − ply` or `-WIN_SCORE + ply`.
@@ -178,16 +177,12 @@ Synchronous loop `for (let depth = 1; ; depth++)`:
 6. **Mate-distance termination** (line 500): `if (bestResult.score > WIN_SCORE - MAX_PLY) break` — stops deepening once a forced mate is found.
 7. **Time check #3** (line 501): after the mate check, before the loop increment — `if (performance.now() - startTime >= timeBudgetMs) break`.
 
-### Early-exit conditions
-1. `cancelSignal.cancelled` — exits immediately.
-2. `performance.now() - startTime >= timeBudgetMs` — checked at THREE points:
-   - Before starting a new depth iteration (line 471).
-   - After checking cancellation post-search (line 472–473: `if (cancelSignal?.cancelled) break`).
-   - **After** persisting the current result and before looping to the next depth (line 501).
-3. Mate band detection (line 500).
+### Deadline enforcement
 
-### Critical gap: no intra-iteration time check
-The time budget is NOT enforced during a call to the search function itself. A single call to `minimaxWithABTT(state, depth, ...)` can exceed the time budget by an arbitrary amount if the tree is large. The time check only fires BETWEEN completed depth iterations.
+- **`SearchLimits.deadlineMs`** is set to `startTime + timeBudgetMs` and checked inside `minimaxWithABTT` at the node level (`checkInterval = 2048`). When the deadline passes, `limits.aborted` is set to `true`, and the function returns immediately.
+- **The analysis worker's `runExpertSearch`** has its own `setTimeout`-based loop with budget checks before each depth iteration and cancellation support via `CancelSignal`.
+- The `CancelSignal` is checked at the start of every search node, providing interrupt capability for cancellations across the full search tree.
+- The `ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION = 3` cap prevents unbounded depth from extra-turn chains.
 
 ---
 
@@ -208,54 +203,55 @@ The casual bot is the only synchronous non-iterative bot. Strong and casual leve
 
 ---
 
-## 8. Analysis Worker & `runBatchAnalysis`
+## 8. Analysis Worker & Batch Analysis
 
 ### 8a. Analysis Worker (`src/bots/analysisWorker.ts`)
 
 The `AnalysisWorkerHandler` class owns:
-- A `sharedTT: TranspositionTable` that persists across all per-position analyses (line 10).
-- A `runExpertSearch` method (line 53) that runs iterative deepening with:
+- A `sharedTT: TranspositionTable` that persists across all per-position analyses — later positions benefit from TT entries accumulated during earlier ones.
+- An optional K=12 endgame tablebase (see §12), with IndexedDB caching.
+- A `runExpertSearch` method that runs a `setTimeout`-based iterative deepening loop with:
   - `evaluateExpert` evaluation.
-  - The shared TT.
-  - Per-position budget from `msg.timeBudgetMs`.
-  - No aspiration windows (always `-Infinity, +Infinity` passed to `minimaxWithABTT` — the analysis worker does NOT use the `iterativeDeepening` function; it has its own loop, line 109–143).
-  - Quiescence depth 1 (line 131: `minimaxWithABTT(..., 1)`).
-  - The loop yields via `setTimeout(iterate, 0)`.
+  - The shared TT (pooled across all positions in a batch run).
+  - Per-position budget from `msg.timeBudgetMs` (default: **3000 ms**, set by the `ANALYSIS_POSITION_BUDGET_MS` constant in `src/ui/batchAnalysis.ts`).
+  - Deadline-based abort via `SearchLimits.deadlineMs` inside `minimaxWithABTT`.
+  - Cancellation support via `CancelSignal`.
+  - Tablebase probe integration when TB is ready.
+  - No aspiration windows (always `-Infinity, +Infinity` passed to `minimaxWithABTT`).
+  - Extra-turn cap of 3 (`ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION`).
 
-**Time budget enforcement** (analysisWorker.ts, lines 110–117):
-```
-if (cancelSignal.cancelled) { sendBestResult(); return }
-if (performance.now() - startTime >= budget) { sendBestResult(); return }
-```
-Checked BEFORE each depth call. Same limitation: a long-running depth call blocks the budget check.
+**Time budget enforcement:** Two layers —
+1. The `iterate` closure checks `performance.now() - startTime >= budget` before each depth iteration (line 363).
+2. `SearchLimits.deadlineMs` is set and checked inside `minimaxWithABTT` at the node level every 2048 nodes, providing intra-iteration deadline enforcement that was previously absent.
 
-**On completion** (`sendBestResult`, lines 68–107):
+**On completion** (`sendBestResult`):
 1. If `bestResult.pv` is empty, picks a random legal move as fallback.
-2. If the position search completed and `bestResult.pv.length > 0`, calls `extractPrincipalVariation(state, rules, tt, evalFn, 100, cancelSignal)` — per-step budget of 100 ms — to overwrite `bestResult.pv` with the re-search-extracted PV.
-3. Posts the `AnalysisResponse` message with `principalVariation`, `rootScores`, `depthReached`, `pitIndex`, `evalScore`.
+2. Calls `extractPrincipalVariation(state, rules, tt, evalFn, { cancelSignal }, tbBestMove)` to build a clean re-search-extracted PV. The extraction uses per-step budgets derived from the remaining main budget, producing high-quality PVs of 15–25 moves on typical midgame positions.
+3. Runs **played-move verification** via `computeExactPlayedEval`: if the played move differs from the best move, it runs `iterativeDeepening` on the child position with `verificationBudget = max(300, timeBudgetMs * 0.35)`, applying sign negation for non-extra-turn moves to convert from opponent perspective back to parent perspective.
+4. Posts the `AnalysisResponse` with `principalVariation`, `rootScores`, `depthReached`, `pitIndex`, `evalScore`, `reachedTerminal`, and `exactPlayedEval`.
 
-### 8b. `runBatchAnalysis` (`src/ui/screens/ReviewScreen.tsx`, line 144)
+**Budget per position (production, `ANALYSIS_POSITION_BUDGET_MS = 3000`):**
+- **3000 ms** — main best-move search via iterative deepening.
+- **max(1050, 300) ms** — played-move verification (35% of budget, min 300ms).
+- **≤2500 ms** — PV extraction re-search (~25 steps × 100ms per step).
+- **Total worst case:** ≈6850 ms per position. The tablebase at K=12 makes 3000ms sufficient for accurate analysis.
 
-1. Called automatically on mount if `cache` (from store) is null (line 240–242).
-2. **Per-position budget:** `5000` ms (line 171: `requestAnalysis(pos.state, 5000)`).
-3. **Sequential** — each position is analyzed one at a time in a `for` loop (line 153).
-4. **Progress tracking:** computes average time per position, estimates remaining seconds.
-5. For each position:
-   - Calls `requestAnalysis` which posts to the analysis worker and returns a promise.
-   - `await` the result.
-   - Extracts `rootScores` from the analysis response.
-   - **Played-move score** (`playedEval`):
-     - If the played move equals the best move → `playedEval = result.evalScore`.
-     - Otherwise:
-       - First try: `rootScores[playedMove.pitIndex]` (line 193–194).
-       - Fallback: apply the played move locally, call `evaluateExpert` on the child, negate if the move was NOT an extra turn (line 197–204).
-   - Pushes an `AnalysisCacheEntry` into `entries[]`.
-6. After the loop completes, stores in both `localCache` state and `setAnalysisCache` (Zustand).
-7. Also calls `updateAnalysisInHistory` to persist analysis to the history store.
+### 8b. Batch Analysis (`src/ui/batchAnalysis.ts`)
+
+**`executeBatchAnalysis`** is the core loop, extracted from the component for testability. It:
+
+1. Processes positions **sequentially** — the shared transposition table across consecutive positions is worth more than parallelism; later positions benefit from TT entries accumulated during earlier analyses.
+2. Takes an injectable `analyze` function (`(state, budgetMs, playedPitIndex?) => Promise<AnalysisResult>`), making it testable with a raw `AnalysisWorkerHandler` without spawning web workers or rendering React.
+3. Accepts `onProgress` callbacks and an optional cancellation `signal`.
+4. Returns `BatchAnalysisEntry[]` with the full `AnalysisCacheEntry` plus `reachedTerminal` flags.
+5. Uses `ANALYSIS_CEILING_MS_PER_POSITION = 7000` for initial time-remaining estimates until real wall-clock timings accumulate.
+
+**Tablebase-loaded progress** is communicated from the worker to UI via `tbProgress` messages from the engine's `generateTablebase` function. The `analysisClient.ts` forwards these through a registered callback (`setOnTBProgress`), which the review screen uses to display "Preparing endgame tables…" on first-ever analysis.
 
 ### 8c. Analysis Client (`src/bots/analysisClient.ts`)
 - Singleton `AnalysisWorker` instantiated via Vite's `?worker` import.
-- `requestAnalysis(state, timeBudgetMs)` returns `{ promise, cancel }`. The cancel function sends a cancel message to the worker.
+- `requestAnalysis(state, timeBudgetMs, playedPitIndex?)` returns `{ promise, cancel }`.
+- `setOnTBProgress(cb)` registers a callback for tablebase generation progress messages.
 - One request at a time per position; `AnalysisHandle` promises are resolved individually.
 
 ---
@@ -274,26 +270,29 @@ where `result` is the recursive call's response. This builds the PV from the lea
 
 ### 9b. Re-search PV extractor (`extractPrincipalVariation`, search.ts line 570)
 
-- Input: a game state, the TT, evalFn, `perStepBudgetMs` (100ms default in the analysis worker call).
+- Input: a game state, the TT, evalFn, `perStepBudgetMs` derived from remaining main budget (not hardcoded 100ms), optional `tbBestMove` function.
 - Algorithm:
   1. `for (let ply = 0; ply < maxPlies; ply++)`:
-     - Run `iterativeDeepening(current, perStepBudgetMs, ...)` with the warm TT.
-     - Take `result.pv[0]` as the best move at this step.
-     - Push to PV, apply move, continue.
+      - Run `iterativeDeepening(current, perStepBudgetMs, ...)` with the warm TT and tablebase probe.
+      - Take `result.pv[0]` as the best move at this step.
+      - Push to PV, apply move, continue.
   2. Stop on terminal state, empty best move, or cancel.
-  3. Returns `{ pv: number[], players: Side[] }`.
-- Uses the search's own TT — since the analysis worker shares the TT across positions, later steps and later positions benefit.
-- Quiescence depth 1 is passed to `iterativeDeepening` inside the extractor (line 594).
+  3. Returns `{ pv: number[], players: Side[], finalState: GameState, reachedTerminal: boolean }`.
+
+**`reachedTerminal` semantics:** This flag is `true` when the PV extraction loop terminates because the game ended (the final state in the line is a terminal position). When `false`, the line stopped for other reasons (budget, cancellation, or no legal moves from a non-terminal position). The UI uses this flag to conditionally display "Line plays to the end of the game."
+
+**Tablebase integration:** When the tablebase is ready, the extractor passes `tbBestMove` to the re-search, enabling the PV to follow proven-optimal moves in endgame positions, producing longer and more accurate lines.
 
 ### 9c. "See what should have happened" — full trace
 
-1. **User clicks** the button at `ReviewScreen.tsx:723` (label: `strings.review.seeWhatHappened`).
-2. This calls `handlePVPlayback` (line 309).
-3. `pvMoves` is derived from `currentEntry?.pv ?? []` (line 284).
-4. `currentEntry` comes from the analysis cache, populated by `runBatchAnalysis` → analysis worker response → `result.principalVariation`.
-5. The analysis worker's `principalVariation` is the output of `extractPrincipalVariation(state, rules, tt, evalFn, 100)` called in `sendBestResult` (analysisWorker.ts:82–92).
-6. `handlePVPlayback` constructs `pvStates` by applying each pit from `pvMoves` sequentially (line 286–295), then steps through them at 1200ms intervals.
+1. **User clicks** the button at `ReviewScreen.tsx` (label: `strings.review.seeWhatHappened`).
+2. This calls `handlePVPlayback`.
+3. `pvMoves` is derived from `currentEntry?.pv ?? []`.
+4. `currentEntry` comes from the analysis cache, populated by `executeBatchAnalysis` → analysis worker response → `result.principalVariation`.
+5. The analysis worker's `principalVariation` is the output of `extractPrincipalVariation` called in `sendBestResult`.
+6. `handlePVPlayback` constructs `pvStates` by applying each pit from `pvMoves` sequentially, then steps through them at 1200ms intervals.
 7. The board display shows `pvStates[pvStep]` while `showPV` is true.
+8. If `reachedTerminal` is true on the cache entry, the caption text includes "Line plays to the end of the game."
 
 **The displayed PV goes through two layers:**
 - **Layer 1** (internal): minimaxWithABTT builds an internal PV as `[pit, ...childPV]`.
@@ -310,7 +309,7 @@ where `result` is the recursive call's response. This builds the PV from the lea
 ### Thresholds and logic
 
 - **Input:** `bestEval` (the engine's top move score), `playedEval` (the human's move score).
-- **Pre-check in caller** (`ReviewScreen.tsx`, `MoveListPanel`): if `playedMove.pitIndex === entry.bestPitIndex`, label is `'best'`. Otherwise call `classifyEvalDrop`.
+- **Pre-check in caller** (`MoveListPanel`): if `playedMove.pitIndex === entry.bestPitIndex`, label is `'best'`. Otherwise call `classifyEvalDrop`.
 
 ### `classifyEvalDrop` (line 80)
 
@@ -340,6 +339,13 @@ evalToCategory(score):
 
 **Note:** There is a subtle asymmetry in outcome-aware classification. When bestEval is WIN and playedEval is ONGOING (the player moved from a winning line to an unclear position), the fallback stone-delta classification is applied. In practice, the delta will often be large (e.g., -9000), so it classifies as `'blunder'` from the numeric threshold, but not from the explicit outcome-transition rule.
 
+### Played-move evaluation
+
+The `playedEval` in `AnalysisCacheEntry` comes from one of three sources, in order of priority:
+1. **Best-move match:** when `playedMove.pitIndex === bestMove.pitIndex`, `playedEval = result.evalScore`.
+2. **Exact verification search:** when the played move differs from the best move, the worker runs `computeExactPlayedEval` — an iterative-deepening search on the child position with correct perspective conversion (negation for non-extra-turn moves). This provides the most accurate played-move evaluation.
+3. **Fallback:** if verification fails, `playedEval = result.evalScore` (the best-move score, a coarse fallback).
+
 ### Classification color display
 `classificationColors` (defined in `src/ui/theme/themes.ts:44`): six hardcoded hex colours (`#2ECC71`, `#3498DB`, `#9B59B6`, `#F39C12`, `#E67E22`, `#C0392B`).
 
@@ -356,36 +362,55 @@ evalToCategory(score):
 
 All use `zustand/middleware/persist` with `JSON.stringify`/`JSON.parse` except `useTheme`, which stores a raw string.
 
-The `analysisCache` in the game store is an array of `AnalysisCacheEntry` objects: `{ bestPitIndex: number, bestEval: number, pv: number[], depth: number, playedEval: number, rootScores: Record<number, number> }`. It is persisted as part of `mancala-current-game`.
+The `analysisCache` in the game store is an array of `AnalysisCacheEntry` objects: `{ bestPitIndex: number, bestEval: number, pv: number[], depth: number, playedEval: number, rootScores: Record<number, number>, reachedTerminal: boolean }`. It is persisted as part of `mancala-current-game`.
 
 ---
 
-## KNOWN ISSUES (observed)
+## 12. Endgame Tablebase
 
-### Issue A: Analysis takes ~5 minutes per position; page never finishes
+**File:** `src/engine/tablebase.ts`
 
-**Most likely cause:** Commit `7686275` (`feat: aspiration windows, extra-turn search depth, outcome-aware classification`) is responsible. The change that made extra-turn moves NOT decrement search depth (`nextDepth = isExtra ? depth : depth - 1`, search.ts:263) radically expands the search tree. In Kalah, it is common for a player to chain 2–4 extra turns in a row, and each extra turn branches over the remaining legal moves at the same depth. The recursion fans out combinatorially instead of linearly deepening.
+### Definition
+A **combinatorial endgame tablebase** for Kalah(6,4) that pre-computes the proven score (store-difference advantage) for every possible distribution of stones into pits. The tablebase answers the question: "Given only the stones currently in pits (ignoring stores), who can force what final margin under optimal play?"
 
-**Time budget enforcement gap:** The `runExpertSearch` function in `analysisWorker.ts` checks `performance.now() - startTime >= budget` only BEFORE calling `minimaxWithABTT` for a depth iteration (lines 110–117). The check at line 114 (in the `iterate` closure) fires once per depth. If a single call to `minimaxWithABTT(state, depth=5 or higher, ...)` takes 5 minutes due to the extra-turn depth explosion, **no budget check fires during that call**. The `CancelSignal` is checked at the start of each recursive node (line 358), but the cancel flag is only set by an external `cancel` message — not by the time budget. The `setTimeout(iterate, 0)` on line 141 only schedules the NEXT iteration; the current one runs to completion synchronously within the worker.
+### Sizing
+- The parameter K is the maximum total stones considered for the tablebase.
+- Production uses **K = 12** (the initial 48 stones is too large; 12 covers all mid-to-late endgame positions).
+- Number of entries: `2 × compositionsCount(12, 13) = 2 × C(12 + 13 - 1, 13 - 1) = 2 × C(24, 12) = 2 × 2,704,156 = 5,408,312`.
+- Memory: one `Int8Array` of 5,408,312 bytes ≈ **5.2 MiB**.
+- Each entry is a single signed byte: the proven score for the side-to-move (positive = good, negative = bad), or `NON_PROBEABLE = -128` for positions the tablebase cannot solve.
 
-**Additionally:** The analysis worker does NOT use the `iterativeDeepening` function (which has 3 time-check points). It has its own loop (`iterate` closure) with only 2 checks: one before the search call, one after. The post-search check at line 133 would NOT fire until the search call completes.
+### Generation algorithm (level-stratified value iteration)
+For each stone level `k = 0, 1, ..., K`:
 
-**Why 88df880 was fast:** In commit `88df880`, extra turns DID decrement depth (`nextDepth = depth - 1` unconditionally, or the `isExtra` branch didn't exist). Each extra turn consumed a ply of search budget, keeping the tree size bounded.
+1. **Pessimistic fixpoint:** Initialize all entries to `−k` (worst case for side-to-move). Iterate until convergence: for each position, pick the move that maximizes `ownStoreGain + tableScore(child)`.
+2. **Optimistic fixpoint:** Initialize all entries to `+k` (best case for side-to-move). Iterate similarly.
+3. **Dual-fixpoint verification:** If the pessimistic and optimistic scores agree for a given position, the tablebase stores the proven value. Otherwise, the position is marked `NON_PROBEABLE` (unsolvable at this K).
 
-### Issue B: "See what should have happened" sometimes shows only 1 move
+### Score encoding
+- Raw tablebase scores range from `−K` to `+K` (pure store-difference, ignoring already-collected stones).
+- `encodeProven(storeDifference + tbScore)` shifts the combined score into the mate-band range `±[WIN_SCORE − MAX_PLY, WIN_SCORE]` for full compatibility with the search engine's score conventions.
 
-**Root cause (traceable through code at 88df880 and HEAD):** The PV displayed to the user passes through two layers, and both can collapse:
+### IndexedDB caching
+- On first use, the tablebase is generated in the analysis worker via `generateTablebase(K, KALAH_STANDARD, progressCallback)`.
+- The `progressCallback` sends `tbProgress` messages (type, level, percent) to the client for UI display.
+- After generation, the `Int8Array` is persisted to IndexedDB under key `tb-k12-kalah-standard-v1` in store `mancala-tablebase/tables`.
+- On subsequent page loads, the cached table is loaded from IndexedDB (3-second timeout fallback to direct generation).
 
-1. **Layer 1 — Internal PV truncation in `minimaxWithABTT`** (search.ts, lines 383–385):
-   ```
-   if (alpha >= beta) {
-     return { score: entry.score, pv: [entry.bestMove] }
-   }
-   ```
-   When a TT entry tightens the alpha/beta window such that `alpha >= beta`, the function prunes and returns a PV with only 1 move. This can happen at any node in the tree, and the truncated PV propagates upward. Even though commit `4708b90` removed an earlier exact-hit early return that was causing PV truncation, this alpha/beta pruning escape path still returns a single-move PV.
+### Probe integration
+- `createTablebaseProbe(table, offsets, maxK)` creates a fast probe function `(pits, side) => number | undefined`.
+- The probe is wrapped at the worker level to add the current store-difference to the tablebase score.
+- Both `minimaxWithABTT` and `iterativeDeepening` accept an optional `TablebaseProbe` parameter. When the probe returns a value for a given position, the search uses it as a proven terminal score, pruning the subtree entirely.
 
-2. **Layer 2 — Re-search extractor (`extractPrincipalVariation`)**: Called with `perStepBudgetMs = 100` (analysisWorker.ts:87). At each step, `iterativeDeepening(current, 100, ...)` runs with a 100ms budget. If the iterative deepening only completes 1–2 depths before timing out, or if the game ends on the next move, the per-step search returns a PV with only 1 move. Since the extractor takes `result.pv[0]` and then re-searches from the resulting position, a single collapsed step doesn't prevent further moves — but if the very first step produces a 1-move PV and the resulting child position is terminal (game over), the overall PV is just 1 move.
+### Best-move selection
+- `createTablebaseBestMove(table, offsets, maxK, rules)` creates a function `(state) => number | undefined` that picks the move leading to the highest combined (storeGain + childTBScore), considering extra-turn and normal-turn cases with correct sign conventions.
 
-3. **Structural explanation for the 1-move collapse:** When `extractPrincipalVariation` calls `iterativeDeepening` at each ply, the internal search at the first ply may return a PV like `[3]` (one move). If applying that move ends the game (opponent's side becomes empty → final sweep → terminal), the loop at line 586 (`if (current.status === 'finished') break`) exits. The resulting PV is `[3]` — one move. This is legitimate: the game ended. But the user may not realize and expects a longer hypothetical line. There is no code path that says "the game ends here, but let me show what could have happened if it hadn't." The extraction stops at the first terminal state.
+---
 
-4. **No alternative PV source is wired:** The display (`ReviewScreen.tsx:284`) reads `currentEntry?.pv ?? []`. The analysis worker sets `bestResult.pv` to `extracted.pv` if extraction succeeds (line 91), or keeps the internal PV from the last completed depth iteration if extraction fails. There is no fallback to re-search with a larger per-step budget, no iterative deepening at the display layer, and no attempt to continue the PV past a terminal state. The display is purely consumption of whatever the worker sent.
+## KNOWN ISSUES (resolved)
+
+The two previously documented issues have been resolved across the following commits:
+
+1. **Analysis timeout (was ~5 min/pos):** Resolved by adding `SearchLimits.deadlineMs` enforcement inside `minimaxWithABTT` (intra-iteration abort at node level every 2048 nodes), capping extra-turn chains at `MAX_EXTRA_TURN_EXTENSION = 3`, and setting realistic production budgets of `ANALYSIS_POSITION_BUDGET_MS = 3000 ms`. The end-to-end test verifies bounded-time completion with a "never hangs" guarantee.
+
+2. **Single-move PV display:** Resolved by replacing the hardcoded 100ms per-step budget in `extractPrincipalVariation` with a budget proportional to the remaining main budget, integrating the tablebase endpoint for endgame PV extension, and adding the `reachedTerminal` flag so the UI can distinguish "game ended" from "PV truncated."

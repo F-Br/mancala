@@ -232,7 +232,14 @@ export class AnalysisWorkerHandler {
     const cancelSignal: CancelSignal = { cancelled: false }
     this.currentCancel = cancelSignal
 
-    const { state, timeBudgetMs, requestId, playedPitIndex } = msg
+    const {
+      state,
+      timeBudgetMs,
+      requestId,
+      playedPitIndex,
+      totalExtractionBudgetMs,
+      perStepExtractionBudgetMs,
+    } = msg
     const rules = KALAH_STANDARD
 
     try {
@@ -243,6 +250,8 @@ export class AnalysisWorkerHandler {
         requestId,
         cancelSignal,
         playedPitIndex,
+        totalExtractionBudgetMs,
+        perStepExtractionBudgetMs,
       )
     } catch (err) {
       this.postMsg({
@@ -261,6 +270,8 @@ export class AnalysisWorkerHandler {
     requestId: number,
     cancelSignal: CancelSignal,
     playedPitIndex: number | undefined,
+    totalExtractionBudgetMs?: number,
+    perStepExtractionBudgetMs?: number,
   ): void {
     const startTime = performance.now()
     const budget = timeBudgetMs
@@ -299,12 +310,21 @@ export class AnalysisWorkerHandler {
       }
 
       if (!cancelSignal.cancelled && bestResult.pv.length > 0) {
+        const extractionMs = Math.max(1, Math.floor(timeBudgetMs - (performance.now() - startTime)))
+        const effTotalExtrBudget =
+          totalExtractionBudgetMs ?? Math.min(2500, Math.max(500, Math.floor(timeBudgetMs * 0.83)))
+        const effPerStepExtrBudget =
+          perStepExtractionBudgetMs ?? Math.min(250, Math.max(50, Math.floor(timeBudgetMs * 0.08)))
         const extracted = extractPrincipalVariation(
           state,
           rules,
           tt,
           evalFn,
-          { cancelSignal },
+          {
+            cancelSignal,
+            perStepBudgetMs: effPerStepExtrBudget,
+            totalBudgetMs: effTotalExtrBudget,
+          },
           this.tbReady ? this.tbBestMove ?? undefined : undefined,
         )
         if (extracted.pv.length > 0) {

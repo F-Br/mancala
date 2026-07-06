@@ -1,4 +1,5 @@
 import type { GameState } from '../engine'
+import type { TbProgressMsg } from '../engine'
 import type { AnalysisWorkerMessage } from './types'
 import AnalysisWorker from './analysisWorker?worker'
 
@@ -22,37 +23,53 @@ type PendingRequest = {
   reject: (error: Error) => void
 }
 
+export type TBProgressCallback = (msg: TbProgressMsg) => void
+
 let worker: Worker | null = null
 let nextRequestId = 1
 const pending = new Map<number, PendingRequest>()
+let tbProgressCB: TBProgressCallback | null = null
+
+export function setOnTBProgress(cb: TBProgressCallback | null): void {
+  tbProgressCB = cb
+}
 
 function getWorker(): Worker {
   if (worker) return worker
 
   worker = new AnalysisWorker()
 
-  worker.onmessage = (event: MessageEvent<AnalysisWorkerMessage>) => {
+  worker.onmessage = (event: MessageEvent<AnalysisWorkerMessage | TbProgressMsg>) => {
     const msg = event.data
 
-    if (msg.type === 'result') {
-      const entry = pending.get(msg.requestId)
-      if (entry) {
-        pending.delete(msg.requestId)
-        entry.resolve({
-          pitIndex: msg.pitIndex,
-          evalScore: msg.evalScore,
-          principalVariation: msg.principalVariation,
-          depthReached: msg.depthReached,
-          rootScores: msg.rootScores ?? {},
-          reachedTerminal: msg.reachedTerminal ?? false,
-          exactPlayedEval: msg.exactPlayedEval,
-        })
+    if (msg && typeof msg === 'object' && 'type' in msg) {
+      if (msg.type === 'tbProgress') {
+        tbProgressCB?.(msg as TbProgressMsg)
+        return
       }
-    } else if (msg.type === 'error') {
-      const entry = pending.get(msg.requestId)
-      if (entry) {
-        pending.delete(msg.requestId)
-        entry.reject(new Error(msg.message))
+    }
+
+    if ('requestId' in msg) {
+      if (msg.type === 'result') {
+        const entry = pending.get(msg.requestId)
+        if (entry) {
+          pending.delete(msg.requestId)
+          entry.resolve({
+            pitIndex: msg.pitIndex,
+            evalScore: msg.evalScore,
+            principalVariation: msg.principalVariation,
+            depthReached: msg.depthReached,
+            rootScores: msg.rootScores ?? {},
+            reachedTerminal: msg.reachedTerminal ?? false,
+            exactPlayedEval: msg.exactPlayedEval,
+          })
+        }
+      } else if (msg.type === 'error') {
+        const entry = pending.get(msg.requestId)
+        if (entry) {
+          pending.delete(msg.requestId)
+          entry.reject(new Error(msg.message))
+        }
       }
     }
   }

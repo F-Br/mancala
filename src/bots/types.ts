@@ -41,6 +41,8 @@ export interface AnalysisRequest {
   timeBudgetMs: number
   requestId: number
   playedPitIndex?: number
+  totalExtractionBudgetMs?: number
+  perStepExtractionBudgetMs?: number
 }
 
 export interface AnalysisCancelRequest {

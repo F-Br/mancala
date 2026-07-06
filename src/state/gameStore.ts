@@ -13,6 +13,7 @@ export interface AnalysisCacheEntry {
   depth: number
   playedEval: number
   rootScores: Record<number, number>
+  reachedTerminal: boolean
 }
 
 export interface SavedMeta {

@@ -3,7 +3,10 @@ import { useNavigate, Navigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { createInitialState, applyMove, cloneState } from '../../engine'
 import type { GameState, Move, Side, RuleConfig } from '../../engine'
-import { requestAnalysis } from '../../bots/analysisClient'
+import {
+  requestAnalysis,
+  setOnTBProgress,
+} from '../../bots/analysisClient'
 import type { AnalysisHandle } from '../../bots/analysisClient'
 import { useGameStore, type AnalysisCacheEntry, type SavedMeta } from '../../state/gameStore'
 import { useModeStore } from '../../state/modeStore'
@@ -18,6 +21,15 @@ import { Board } from '../components/Board'
 import { Chip } from '../components/Chip'
 import { ScorePanel } from '../components/ScorePanel'
 import { EvalGraph, type EvalGraphPoint } from '../components/EvalGraph'
+import {
+  executeBatchAnalysis,
+  replayPositions,
+  ANALYSIS_POSITION_BUDGET_MS,
+  ANALYSIS_CEILING_MS_PER_POSITION,
+  type PositionInfo,
+  type BatchProgress,
+} from '../batchAnalysis'
+import type { TbProgressMsg } from '../../engine'
 
 const classificationLabel: Record<ClassificationKey, string> = {
   best: strings.review.best,
@@ -26,13 +38,6 @@ const classificationLabel: Record<ClassificationKey, string> = {
   inaccuracy: strings.review.inaccuracy,
   mistake: strings.review.mistake,
   blunder: strings.review.blunder,
-}
-
-interface PositionInfo {
-  state: GameState
-  move: Move | undefined
-  index: number
-  player: Side
 }
 
 function notatePit(p: number): string {
@@ -62,37 +67,6 @@ function isHumanPos(pos: PositionInfo, savedMeta: SavedMeta | null): boolean {
   return pos.player === human
 }
 
-function replayPositions(
-  gameState: GameState,
-  firstPlayer: Side,
-  rules: RuleConfig,
-): PositionInfo[] {
-  const initial = createInitialState(rules, firstPlayer)
-  const positions: PositionInfo[] = []
-
-  let current = cloneState(initial)
-
-  for (let i = 0; i < gameState.moveHistory.length; i++) {
-    const move = gameState.moveHistory[i]!
-    positions.push({
-      state: cloneState(current),
-      move,
-      index: i,
-      player: move.player,
-    })
-    current = applyMove(current, move.pitIndex, rules)
-  }
-
-  positions.push({
-    state: cloneState(current),
-    move: undefined,
-    index: gameState.moveHistory.length,
-    player: current.currentPlayer,
-  })
-
-  return positions
-}
-
 export function ReviewScreen() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -110,6 +84,7 @@ export function ReviewScreen() {
   const showPitCounts = useSettingsStore((s) => s.showPitCounts)
 
   const [analyzing, setAnalyzing] = useState(false)
+  const [tbPhase, setTbPhase] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0, remaining: 0 })
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showPV, setShowPV] = useState(false)
@@ -123,6 +98,8 @@ export function ReviewScreen() {
   const pvIndexAtStart = useRef<number | null>(null)
   const playbackRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const updateHistoryRef = useRef(false)
+  const tbPhaseRef = useRef(false)
+  const firstProgressRef = useRef(true)
 
   const effectiveSpeed = animationSpeed > 0 ? animationSpeed : 1
 
@@ -144,81 +121,50 @@ export function ReviewScreen() {
     if (!gameState || positions.length <= 1) return
     const moveCount = gameState.moveHistory.length
     setAnalyzing(true)
+    tbPhaseRef.current = false
+    firstProgressRef.current = true
     setProgress({ current: 0, total: moveCount, remaining: 0 })
 
-    const entries: AnalysisCacheEntry[] = []
-
-      const startTime = performance.now()
-      for (let i = 0; i < moveCount; i++) {
-      const pos = positions[i]
-      if (!pos || !pos.move || pos.state.status !== 'in-progress') {
-        entries.push({
-          bestPitIndex: -1,
-          bestEval: 0,
-          pv: [],
-          depth: 0,
-          playedEval: 0,
-          rootScores: {},
-        })
-        setProgress({ current: i + 1, total: moveCount, remaining: 0 })
-        continue
+    const handleTbProgress = (msg: TbProgressMsg) => {
+      if (!tbPhaseRef.current) {
+        tbPhaseRef.current = true
+        setTbPhase(true)
       }
+    }
 
-      let remaining = 0
-      try {
-        const handle = await requestAnalysis(pos.state, 5000, pos.move!.pitIndex)
+    setOnTBProgress(handleTbProgress)
+
+    const batchResult = await executeBatchAnalysis({
+      positions,
+      analyze: async (state, budgetMs, playedPitIndex) => {
+        const handle = await requestAnalysis(state, budgetMs, playedPitIndex)
         analysisRef.current = handle
         const result = await handle.promise
         analysisRef.current = null
-
-        const elapsed = performance.now() - startTime
-        const avgMsPerPos = elapsed / (i + 1)
-        remaining = Math.round((moveCount - i - 1) * avgMsPerPos / 1000)
-
-        const rootScores = result.rootScores ?? {}
-        const playedMove = pos.move
-
-        if (playedMove.pitIndex === result.pitIndex || result.pitIndex < 0) {
-          entries.push({
-            bestPitIndex: result.pitIndex,
-            bestEval: result.evalScore,
-            pv: result.principalVariation,
-            depth: result.depthReached,
-            playedEval: result.evalScore,
-            rootScores,
-          })
-        } else {
-          const playedEval = result.exactPlayedEval ?? result.evalScore
-
-          entries.push({
-            bestPitIndex: result.pitIndex,
-            bestEval: result.evalScore,
-            pv: result.principalVariation,
-            depth: result.depthReached,
-            playedEval,
-            rootScores,
-          })
+        return result
+      },
+      positionBudgetMs: ANALYSIS_POSITION_BUDGET_MS,
+      onProgress: (p: BatchProgress) => {
+        if (tbPhaseRef.current && p.current > 0) {
+          tbPhaseRef.current = false
+          setTbPhase(false)
         }
+        let remaining = p.remainingS
+        if (firstProgressRef.current && remaining === 0 && p.current > 0 && p.current < p.total) {
+          remaining = Math.round((p.total - p.current) * ANALYSIS_CEILING_MS_PER_POSITION / 1000)
+          firstProgressRef.current = false
+        }
+        setProgress({ current: p.current, total: p.total, remaining })
+      },
+    })
 
-        analysisRef.current = null
-      } catch {
-        analysisRef.current = null
-        entries.push({
-          bestPitIndex: -1,
-          bestEval: 0,
-          pv: [],
-          depth: 0,
-          playedEval: 0,
-          rootScores: {},
-        })
-      }
+    setOnTBProgress(null)
 
-      setProgress({ current: i + 1, total: moveCount, remaining })
-    }
-
+    const entries: AnalysisCacheEntry[] = batchResult.map((r) => r.entry)
     setLocalCache(entries)
     setAnalysisCache(entries)
     setAnalyzing(false)
+    setTbPhase(false)
     updateHistoryRef.current = true
   }, [gameState, positions, rules, setAnalysisCache])
 
@@ -237,6 +183,7 @@ export function ReviewScreen() {
 
   useEffect(() => {
     return () => {
+      setOnTBProgress(null)
       if (analysisRef.current) analysisRef.current.cancel()
       if (pvTimerRef.current) clearInterval(pvTimerRef.current)
       if (playbackRef.current) clearInterval(playbackRef.current)
@@ -268,6 +215,7 @@ export function ReviewScreen() {
     currentPos.move!.pitIndex !== currentEntry.bestPitIndex
 
   const pvMoves = currentEntry?.pv ?? []
+  const pvReachedTerminal = currentEntry?.reachedTerminal ?? false
 
   const pvStates = useMemo(() => {
     if (!currentPos || pvMoves.length === 0) return []
@@ -399,7 +347,6 @@ export function ReviewScreen() {
 
   const displayState = showPV && pvStates[pvStep] ? pvStates[pvStep] : (currentPos?.state ?? null)
 
-  // Primary accent (theme colour): the recommended/best move (or PV step during playback)
   const accentPitForDisplay =
     showPV && pvMoves[pvStep] != null
       ? pvMoves[pvStep]
@@ -407,7 +354,6 @@ export function ReviewScreen() {
         ? currentEntry.bestPitIndex
         : null
 
-  // Secondary accent (classification-coloured): the move the player actually played
   const secondaryAccentPit =
     showPV
       ? null
@@ -523,7 +469,9 @@ export function ReviewScreen() {
 
       {analyzing && (
         <div className="flex flex-col items-center gap-2 py-12">
-          <p className="text-muted text-sm">{strings.review.analyzing}</p>
+          <p className="text-muted text-sm">
+            {tbPhase ? strings.review.preparingEndgameTables : strings.review.analyzing}
+          </p>
           <div className="w-48 h-2 bg-board/40 rounded-full overflow-hidden">
             <motion.div
               className="h-full bg-accent rounded-full"
@@ -535,8 +483,10 @@ export function ReviewScreen() {
             />
           </div>
           <p className="text-xs text-muted">
-            {strings.review.progress(progress.current, progress.total)}
-            {progress.remaining > 30 && (
+            {tbPhase
+              ? ''
+              : strings.review.progress(progress.current, progress.total)}
+            {progress.remaining > 30 && !tbPhase && (
               <span className="ml-2">
                 &middot; ~{Math.floor(progress.remaining / 60)}m{String(progress.remaining % 60).padStart(2, '0')}s
               </span>
@@ -547,7 +497,6 @@ export function ReviewScreen() {
 
       {!analyzing && cache && (
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:gap-x-8 flex flex-col gap-5">
-          {/* RIGHT column: Graph + Move List (rendered first in DOM for mobile stacking) */}
           <div className="lg:sticky lg:top-4 flex flex-col gap-4 lg:max-h-[calc(100vh-2rem)] order-first lg:order-none">
             <div>
               <p className="text-label text-muted mb-2">{strings.review.evalGraph}</p>
@@ -581,7 +530,6 @@ export function ReviewScreen() {
             </div>
           </div>
 
-          {/* LEFT column: Board + Controls */}
           <div className="flex flex-col items-center gap-4">
             {displayState && (
               <>
@@ -618,7 +566,6 @@ export function ReviewScreen() {
               </>
             )}
 
-            {/* Scrubber bar */}
             <div className="flex items-center gap-2 w-full max-w-md">
               <button
                 type="button"
@@ -642,7 +589,6 @@ export function ReviewScreen() {
               </span>
             </div>
 
-            {/* Prev/Next row */}
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -675,7 +621,6 @@ export function ReviewScreen() {
               </button>
             </div>
 
-            {/* Move context */}
             <div className="text-xs text-muted text-center flex flex-col gap-1 min-h-[1.5em]">
               {currentPos?.move && (
                 <span>
@@ -705,7 +650,6 @@ export function ReviewScreen() {
               )}
             </div>
 
-            {/* PV section */}
             {playedMoveNotBest && !showPV && isHumanTurn && (
               <button
                 type="button"
@@ -749,12 +693,18 @@ export function ReviewScreen() {
                   <p className="text-[10px] text-muted/50 mt-1">
                     Animating &middot; click any chip to scrub &middot; press
                     &ldquo;See&hellip;&rdquo; again to restart
+                    {pvReachedTerminal && (
+                      <span> &middot; {strings.review.linePlaysToEnd}</span>
+                    )}
                   </p>
                 )}
                 {pvStep >= pvStates.length - 1 && (
                   <p className="text-[10px] text-muted/50 mt-1">
                     Variation complete &middot; click any chip to review &middot; press
                     &ldquo;See&hellip;&rdquo; to restart
+                    {pvReachedTerminal && (
+                      <span> &middot; {strings.review.linePlaysToEnd}</span>
+                    )}
                   </p>
                 )}
               </motion.div>
@@ -815,7 +765,6 @@ function MoveListPanel({
                 : 'hover:bg-board/20 text-text')
             }
           >
-            {/* Left part */}
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-muted w-6 text-left text-xs font-mono shrink-0">
                 {index + 1}
@@ -833,7 +782,6 @@ function MoveListPanel({
               )}
             </div>
 
-            {/* Right part */}
             <div className="flex items-center gap-2 shrink-0">
               {!isBest && evalDrop > 0.01 && (
                 <span className="text-[11px] font-medium tabular-nums" style={{ color }}>

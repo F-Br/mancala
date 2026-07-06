@@ -79,6 +79,7 @@ export const strings = {
   review: {
     title: 'Review',
     analyzing: 'Analyzing\u2026',
+    preparingEndgameTables: 'Preparing endgame tables\u2026',
     progress: (current: number, total: number) => `${current} / ${total}`,
     evalGraph: 'Evaluation',
     moveList: 'Moves',
@@ -89,6 +90,7 @@ export const strings = {
     mistake: 'Mistake',
     blunder: 'Blunder',
     seeWhatHappened: 'See what should have happened',
+    linePlaysToEnd: 'Line plays to the end of the game',
     recommended: 'Recommended',
     played: 'Played',
     stones: (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}`,
