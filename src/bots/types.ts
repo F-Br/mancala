@@ -55,6 +55,7 @@ export interface AnalysisResponse {
   depthReached: number
   requestId: number
   rootScores: Record<number, number>
+  reachedTerminal: boolean
 }
 
 export interface AnalysisError {

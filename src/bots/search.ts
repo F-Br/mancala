@@ -655,11 +655,38 @@ export function pickMoveExpert(
 
 // ── Principal Variation Extraction via Re-search ─────────────────────────
 
-export const MAX_PV_PLIES = 80
+export interface ExtractPVOptions {
+  perStepBudgetMs?: number
+  totalBudgetMs?: number
+  maxPlies?: number
+  cancelSignal?: CancelSignal
+}
 
 export interface ExtractedPV {
   pv: number[]
   players: Side[]
+  finalState: GameState
+  reachedTerminal: boolean
+}
+
+function greedyMove(
+  current: GameState,
+  moves: number[],
+  rules: RuleConfig,
+  evalFn: EvaluationFn,
+): number {
+  let best = moves[0]!
+  let bestScore = -Infinity
+  for (const pit of moves) {
+    const child = applyMove(current, pit, rules)
+    const lastMove = child.moveHistory[child.moveHistory.length - 1]
+    const score = lastMove?.wasExtraTurn ? evalFn(child, rules) : -evalFn(child, rules)
+    if (score > bestScore) {
+      bestScore = score
+      best = pit
+    }
+  }
+  return best
 }
 
 export function extractPrincipalVariation(
@@ -667,21 +694,33 @@ export function extractPrincipalVariation(
   rules: RuleConfig,
   tt: TranspositionTable,
   evalFn: EvaluationFn,
-  perStepBudgetMs: number,
-  cancelSignal?: CancelSignal,
-  maxPlies = MAX_PV_PLIES,
+  options: ExtractPVOptions = {},
 ): ExtractedPV {
+  const {
+    perStepBudgetMs = 250,
+    totalBudgetMs = 2500,
+    maxPlies = 300,
+    cancelSignal,
+  } = options
+
   const pv: number[] = []
   const players: Side[] = []
   let current = cloneState(state)
+  const totalStart = performance.now()
 
-  for (let ply = 0; ply < maxPlies; ply++) {
+  while (true) {
     if (cancelSignal?.cancelled) break
     if (current.status === 'finished') break
+    if (pv.length >= maxPlies) break
+
+    const elapsed = performance.now() - totalStart
+    if (elapsed >= totalBudgetMs) break
+
+    const stepBudget = Math.min(perStepBudgetMs, totalBudgetMs - elapsed)
 
     const result = iterativeDeepening(
       current,
-      perStepBudgetMs,
+      stepBudget,
       rules,
       evalFn,
       tt,
@@ -691,16 +730,32 @@ export function extractPrincipalVariation(
 
     if (cancelSignal?.cancelled) break
 
-    const bestMove = result.pv[0]
-    if (bestMove === undefined) break
+    const moves = legalMoves(current, rules)
+    let chosenMove: number | undefined
 
-    pv.push(bestMove)
+    if (result.pv[0] !== undefined && moves.includes(result.pv[0])) {
+      chosenMove = result.pv[0]
+    }
+
+    if (chosenMove === undefined) {
+      const hash = tt.computeHash(current)
+      const lock = tt.computeLock(current)
+      const entry = tt.get(hash, lock)
+      if (entry && entry.bestMove !== undefined && moves.includes(entry.bestMove)) {
+        chosenMove = entry.bestMove
+      }
+    }
+
+    if (chosenMove === undefined) {
+      chosenMove = greedyMove(current, moves, rules, evalFn)
+    }
+
+    pv.push(chosenMove)
     players.push(current.currentPlayer)
-
-    current = applyMove(current, bestMove, rules)
+    current = applyMove(current, chosenMove, rules)
   }
 
-  return { pv, players }
+  return { pv, players, finalState: current, reachedTerminal: current.status === 'finished' }
 }
 
 export { minimax, minimaxWithAB, minimaxWithABTT }

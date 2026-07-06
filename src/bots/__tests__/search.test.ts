@@ -643,7 +643,7 @@ describe('extractPrincipalVariation', () => {
     const state = makeState({ board, currentPlayer: 'bottom' })
 
     const tt = new TranspositionTable()
-    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, 200)
+    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, { perStepBudgetMs: 200 })
 
     expect(result.pv.length).toBeGreaterThan(0)
 
@@ -663,7 +663,7 @@ describe('extractPrincipalVariation', () => {
     const state = createInitialState()
     const tt = new TranspositionTable()
     // Small per-step budget with a capped plume length to keep test fast
-    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, 50, undefined, 6)
+    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, { perStepBudgetMs: 50, maxPlies: 6 })
 
     // From the initial 6×4 Kalah position, the PV should extend well beyond one move
     expect(result.pv.length).toBeGreaterThan(1)
@@ -689,7 +689,7 @@ describe('extractPrincipalVariation', () => {
     expect(analysis.pv.length).toBeGreaterThan(0)
 
     // Extract full PV from this position (warm TT)
-    const extracted = extractPrincipalVariation(state, RULES, tt, evaluateSimple, 200)
+    const extracted = extractPrincipalVariation(state, RULES, tt, evaluateSimple, { perStepBudgetMs: 200 })
     expect(extracted.pv.length).toBeGreaterThan(0)
 
     // Apply the extracted PV move by move
@@ -719,7 +719,7 @@ describe('extractPrincipalVariation', () => {
     const state = makeState({ board, currentPlayer: 'bottom' })
 
     const tt = new TranspositionTable()
-    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, 300)
+    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, { perStepBudgetMs: 300 })
 
     expect(result.pv.length).toBeGreaterThan(1)
     expect(result.players.length).toBe(result.pv.length)
@@ -749,7 +749,7 @@ describe('extractPrincipalVariation', () => {
     const state = makeState({ board, status: 'finished', winner: 'draw' })
 
     const tt = new TranspositionTable()
-    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, 200)
+    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, { perStepBudgetMs: 200 })
 
     expect(result.pv).toEqual([])
     expect(result.players).toEqual([])
@@ -760,7 +760,7 @@ describe('extractPrincipalVariation', () => {
     const tt = new TranspositionTable()
     const cancel: CancelSignal = { cancelled: true }
 
-    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, 500, cancel)
+    const result = extractPrincipalVariation(state, RULES, tt, evaluateSimple, { perStepBudgetMs: 500, cancelSignal: cancel })
 
     expect(result.pv).toEqual([])
     expect(result.players).toEqual([])

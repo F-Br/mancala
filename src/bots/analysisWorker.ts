@@ -75,6 +75,8 @@ export class AnalysisWorkerHandler {
     let depth = 1
 
     const sendBestResult = (): void => {
+      let reachedTerminal = false
+
       if (bestResult.pv.length === 0) {
         const moves = legalMoves(state, rules)
         if (moves.length > 0) {
@@ -93,12 +95,12 @@ export class AnalysisWorkerHandler {
           rules,
           tt,
           evalFn,
-          100,
-          cancelSignal,
+          { cancelSignal },
         )
         if (extracted.pv.length > 0) {
           bestResult = { ...bestResult, pv: extracted.pv }
         }
+        reachedTerminal = extracted.reachedTerminal
       }
 
       this.postMsg({
@@ -109,6 +111,7 @@ export class AnalysisWorkerHandler {
         depthReached: bestResult.depth,
         requestId,
         rootScores: bestResult.rootScores,
+        reachedTerminal,
       })
       if (this.currentCancel === cancelSignal) {
         this.currentCancel = null

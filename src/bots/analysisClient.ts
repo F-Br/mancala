@@ -8,6 +8,7 @@ export interface AnalysisResult {
   principalVariation: number[]
   depthReached: number
   rootScores: Record<number, number>
+  reachedTerminal: boolean
 }
 
 export interface AnalysisHandle {
@@ -42,6 +43,7 @@ function getWorker(): Worker {
           principalVariation: msg.principalVariation,
           depthReached: msg.depthReached,
           rootScores: msg.rootScores ?? {},
+          reachedTerminal: msg.reachedTerminal ?? false,
         })
       }
     } else if (msg.type === 'error') {
