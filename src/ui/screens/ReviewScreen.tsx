@@ -166,7 +166,7 @@ export function ReviewScreen() {
 
       let remaining = 0
       try {
-        const handle = await requestAnalysis(pos.state, 5000, playedMove.pitIndex)
+        const handle = await requestAnalysis(pos.state, 5000, pos.move!.pitIndex)
         analysisRef.current = handle
         const result = await handle.promise
         analysisRef.current = null
