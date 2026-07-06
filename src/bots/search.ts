@@ -8,6 +8,13 @@ export interface CancelSignal {
   cancelled: boolean
 }
 
+export interface SearchLimits {
+  deadlineMs: number | null
+  nodeCount: number
+  aborted: boolean
+  checkInterval: number
+}
+
 export interface SearchResult {
   score: number
   pv: number[]
@@ -162,8 +169,17 @@ function quiesce(
   evalFn: EvaluationFn,
   cancelSignal?: CancelSignal,
   ply = 0,
+  limits?: SearchLimits,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
+  if (limits) {
+    limits.nodeCount++
+    if (limits.aborted) return { score: NaN, pv: [] }
+    if (limits.deadlineMs !== null && limits.nodeCount % limits.checkInterval === 0 && performance.now() >= limits.deadlineMs) {
+      limits.aborted = true
+      return { score: NaN, pv: [] }
+    }
+  }
   if (state.status === 'finished') {
     const base = evalFn(state, rules)
     const score = adjustTerminalScore(base, ply)
@@ -201,8 +217,9 @@ function quiesce(
     if (!lastMove?.captured) continue
 
     const result = lastMove?.wasExtraTurn
-      ? quiesce(child, qDepth + 1, alpha, beta, rules, evalFn, cancelSignal, ply + 1)
-      : quiesce(child, qDepth + 1, -beta, -alpha, rules, evalFn, cancelSignal, ply + 1)
+      ? quiesce(child, qDepth + 1, alpha, beta, rules, evalFn, cancelSignal, ply + 1, limits)
+      : quiesce(child, qDepth + 1, -beta, -alpha, rules, evalFn, cancelSignal, ply + 1, limits)
+    if (limits?.aborted) break
     const score = lastMove?.wasExtraTurn ? result.score : -result.score
 
     if (score > bestScore) {
@@ -213,6 +230,7 @@ function quiesce(
     if (alpha >= beta) break
   }
 
+  if (limits?.aborted) return { score: NaN, pv: [] }
   return { score: bestScore, pv: bestPV }
 }
 
@@ -234,15 +252,24 @@ function minimax(
   quiesceDepth?: number,
   ply = 0,
   extraTurnChain = 0,
+  limits?: SearchLimits,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
+  if (limits) {
+    limits.nodeCount++
+    if (limits.aborted) return { score: NaN, pv: [] }
+    if (limits.deadlineMs !== null && limits.nodeCount % limits.checkInterval === 0 && performance.now() >= limits.deadlineMs) {
+      limits.aborted = true
+      return { score: NaN, pv: [] }
+    }
+  }
   if (state.status === 'finished') {
     const base = evalFn(state, rules)
     return { score: adjustTerminalScore(base, ply), pv: [] }
   }
   if (depth === 0) {
     return quiesceDepth && quiesceDepth > 0
-      ? quiesce(state, 0, -Infinity, +Infinity, rules, evalFn, cancelSignal, ply)
+      ? quiesce(state, 0, -Infinity, +Infinity, rules, evalFn, cancelSignal, ply, limits)
       : { score: evalFn(state, rules), pv: [] }
   }
 
@@ -257,14 +284,16 @@ function minimax(
 
   for (const pit of ordered) {
     if (cancelSignal?.cancelled) break
+    if (limits?.aborted) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
     const isExtra = childMove?.wasExtraTurn && extraTurnChain < MAX_EXTRA_TURN_CHAIN
     const nextDepth = isExtra ? depth : depth - 1
     const nextChain = isExtra ? extraTurnChain + 1 : 0
     const result = isExtra
-      ? minimax(child, nextDepth, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain)
-      : minimax(child, nextDepth, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, 0)
+      ? minimax(child, nextDepth, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits)
+      : minimax(child, nextDepth, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits)
+    if (limits?.aborted) break
     const score = isExtra ? result.score : -result.score
 
     if (rootScores !== undefined) {
@@ -277,6 +306,7 @@ function minimax(
     }
   }
 
+  if (limits?.aborted) return { score: NaN, pv: [] }
   return { score: bestScore, pv: bestPV }
 }
 
@@ -292,15 +322,24 @@ function minimaxWithAB(
   quiesceDepth?: number,
   ply = 0,
   extraTurnChain = 0,
+  limits?: SearchLimits,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
+  if (limits) {
+    limits.nodeCount++
+    if (limits.aborted) return { score: NaN, pv: [] }
+    if (limits.deadlineMs !== null && limits.nodeCount % limits.checkInterval === 0 && performance.now() >= limits.deadlineMs) {
+      limits.aborted = true
+      return { score: NaN, pv: [] }
+    }
+  }
   if (state.status === 'finished') {
     const base = evalFn(state, rules)
     return { score: adjustTerminalScore(base, ply), pv: [] }
   }
   if (depth === 0) {
     return quiesceDepth && quiesceDepth > 0
-      ? quiesce(state, 0, alpha, beta, rules, evalFn, cancelSignal, ply)
+      ? quiesce(state, 0, alpha, beta, rules, evalFn, cancelSignal, ply, limits)
       : { score: evalFn(state, rules), pv: [] }
   }
 
@@ -315,14 +354,16 @@ function minimaxWithAB(
 
   for (const pit of ordered) {
     if (cancelSignal?.cancelled) break
+    if (limits?.aborted) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
     const isExtra = childMove?.wasExtraTurn && extraTurnChain < MAX_EXTRA_TURN_CHAIN
     const nextDepth = isExtra ? depth : depth - 1
     const nextChain = isExtra ? extraTurnChain + 1 : 0
     const result = isExtra
-      ? minimaxWithAB(child, nextDepth, alpha, beta, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain)
-      : minimaxWithAB(child, nextDepth, -beta, -alpha, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, 0)
+      ? minimaxWithAB(child, nextDepth, alpha, beta, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits)
+      : minimaxWithAB(child, nextDepth, -beta, -alpha, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits)
+    if (limits?.aborted) break
     const score = isExtra ? result.score : -result.score
 
     if (rootScores !== undefined) {
@@ -338,6 +379,7 @@ function minimaxWithAB(
     if (alpha >= beta) break
   }
 
+  if (limits?.aborted) return { score: NaN, pv: [] }
   return { score: bestScore, pv: bestPV }
 }
 
@@ -354,8 +396,17 @@ function minimaxWithABTT(
   quiesceDepth?: number,
   ply = 0,
   extraTurnChain = 0,
+  limits?: SearchLimits,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
+  if (limits) {
+    limits.nodeCount++
+    if (limits.aborted) return { score: NaN, pv: [] }
+    if (limits.deadlineMs !== null && limits.nodeCount % limits.checkInterval === 0 && performance.now() >= limits.deadlineMs) {
+      limits.aborted = true
+      return { score: NaN, pv: [] }
+    }
+  }
 
   const originalAlpha = alpha
   const originalBeta = beta
@@ -391,7 +442,7 @@ function minimaxWithABTT(
   }
   if (depth === 0) {
     return quiesceDepth && quiesceDepth > 0
-      ? quiesce(state, 0, alpha, beta, rules, evalFn, cancelSignal, ply)
+      ? quiesce(state, 0, alpha, beta, rules, evalFn, cancelSignal, ply, limits)
       : { score: evalFn(state, rules), pv: [] }
   }
 
@@ -406,14 +457,16 @@ function minimaxWithABTT(
 
   for (const pit of ordered) {
     if (cancelSignal?.cancelled) break
+    if (limits?.aborted) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
     const isExtra = childMove?.wasExtraTurn && extraTurnChain < MAX_EXTRA_TURN_CHAIN
     const nextDepth = isExtra ? depth : depth - 1
     const nextChain = isExtra ? extraTurnChain + 1 : 0
     const result = isExtra
-      ? minimaxWithABTT(child, nextDepth, alpha, beta, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain)
-      : minimaxWithABTT(child, nextDepth, -beta, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, 0)
+      ? minimaxWithABTT(child, nextDepth, alpha, beta, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits)
+      : minimaxWithABTT(child, nextDepth, -beta, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits)
+    if (limits?.aborted) break
     const score = isExtra ? result.score : -result.score
 
     if (rootScores !== undefined) {
@@ -429,7 +482,9 @@ function minimaxWithABTT(
     if (alpha >= beta) break
   }
 
-  // Store in TT
+  if (limits?.aborted) return { score: NaN, pv: [] }
+
+  // Store in TT — only if the search completed normally
   const bestMove = bestPV[0]
   if (bestMove !== undefined) {
     let flag: TTEntry['flag']
@@ -462,36 +517,59 @@ export function iterativeDeepening(
   tt: TranspositionTable | null,
   cancelSignal?: CancelSignal,
   quiesceDepth?: number,
+  maxDepth?: number,
 ): IterativeResult {
   const startTime = performance.now()
   let bestResult: IterativeResult = { score: 0, pv: [], depth: 0, rootScores: {} }
   let prevScore: number | null = null
 
+  const limits: SearchLimits = {
+    deadlineMs: startTime + timeBudgetMs,
+    nodeCount: 0,
+    aborted: false,
+    checkInterval: 2048,
+  }
+
   for (let depth = 1; ; depth++) {
     if (cancelSignal?.cancelled) break
-    if (performance.now() - startTime >= timeBudgetMs) break
+    if (maxDepth !== undefined && depth > maxDepth) break
+    if (depth > 1 && performance.now() - startTime >= timeBudgetMs) break
 
     const rootScores: Record<number, number> = {}
     const useAspiration = prevScore !== null && !isInMateBand(prevScore)
     const alpha = useAspiration ? prevScore! - ASPIRATION_WINDOW : -Infinity
     const beta = useAspiration ? prevScore! + ASPIRATION_WINDOW : +Infinity
 
+    // Depth 1 runs without deadline enforcement so we always have a valid result
+    const useLimits = depth === 1 ? undefined : limits
+    if (useLimits) {
+      limits.aborted = false
+    }
+
     let result: SearchResult
     if (tt) {
-      result = minimaxWithABTT(state, depth, alpha, beta, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth)
+      result = minimaxWithABTT(state, depth, alpha, beta, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits)
     } else {
-      result = minimaxWithAB(state, depth, alpha, beta, rules, evalFn, cancelSignal, rootScores, quiesceDepth)
+      result = minimaxWithAB(state, depth, alpha, beta, rules, evalFn, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits)
     }
 
     if (cancelSignal?.cancelled) break
 
+    // Discard aborted (partial) results
+    if (isNaN(result.score) || limits.aborted) {
+      break
+    }
+
     if (useAspiration && (result.score <= alpha || result.score >= beta)) {
+      let reResult: SearchResult
       if (tt) {
-        result = minimaxWithABTT(state, depth, -Infinity, +Infinity, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth)
+        reResult = minimaxWithABTT(state, depth, -Infinity, +Infinity, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits)
       } else {
-        result = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal, rootScores, quiesceDepth)
+        reResult = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits)
       }
       if (cancelSignal?.cancelled) break
+      if (isNaN(reResult.score) || limits.aborted) break
+      result = reResult
     }
 
     prevScore = result.score
