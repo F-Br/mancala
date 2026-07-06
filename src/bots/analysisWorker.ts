@@ -1,17 +1,18 @@
 import type { GameState, RuleConfig } from '../engine'
 import { KALAH_STANDARD, legalMoves } from '../engine'
 import { minimaxWithABTT, TranspositionTable, extractPrincipalVariation } from './search'
-import type { CancelSignal } from './search'
+import type { CancelSignal, SearchLimits } from './search'
 import { evaluateExpert } from './evaluation'
 import type { AnalysisMessage, AnalysisWorkerMessage, AnalysisRequest } from './types'
 
 export class AnalysisWorkerHandler {
   private currentCancel: CancelSignal | null = null
-  private sharedTT: TranspositionTable = new TranspositionTable()
+  private sharedTT: TranspositionTable
   private readonly postMsg: (msg: AnalysisWorkerMessage) => void
 
-  constructor(postMsg: (msg: AnalysisWorkerMessage) => void) {
+  constructor(postMsg: (msg: AnalysisWorkerMessage) => void, maxTTEntries?: number) {
     this.postMsg = postMsg
+    this.sharedTT = new TranspositionTable(maxTTEntries)
   }
 
   handleMessage(msg: AnalysisMessage): void {
@@ -59,8 +60,16 @@ export class AnalysisWorkerHandler {
   ): void {
     const startTime = performance.now()
     const budget = timeBudgetMs
+    const deadlineMs = startTime + timeBudgetMs
     const evalFn = evaluateExpert
     const tt = this.sharedTT
+
+    const limits: SearchLimits = {
+      deadlineMs,
+      nodeCount: 0,
+      aborted: false,
+      checkInterval: 2048,
+    }
 
     let bestResult = { score: 0, pv: [] as number[], depth: 0, rootScores: {} as Record<number, number> }
     let depth = 1
@@ -116,6 +125,8 @@ export class AnalysisWorkerHandler {
         return
       }
 
+      limits.aborted = false
+
       const rootScores: Record<number, number> = {}
       const result = minimaxWithABTT(
         state,
@@ -128,9 +139,18 @@ export class AnalysisWorkerHandler {
         cancelSignal,
         rootScores,
         1,
+        0,
+        0,
+        depth === 1 ? undefined : limits,
       )
 
       if (cancelSignal.cancelled) {
+        sendBestResult()
+        return
+      }
+
+      // Discard aborted mid-iteration results; keep last completed depth's result
+      if (isNaN(result.score) || limits.aborted) {
         sendBestResult()
         return
       }

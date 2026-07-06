@@ -1,7 +1,7 @@
 import type { GameState, RuleConfig } from '../engine'
 import { KALAH_STANDARD, legalMoves } from '../engine'
 import { pickMoveBeginner, pickMoveCasual, minimaxWithAB, minimaxWithABTT } from './search'
-import type { CancelSignal } from './search'
+import type { CancelSignal, SearchLimits } from './search'
 import { TranspositionTable } from './search'
 import { evaluateStrong, evaluateExpert, WIN_SCORE, MAX_PLY } from './evaluation'
 import type { BotMessage, BotWorkerMessage, BotRequest } from './types'
@@ -92,8 +92,16 @@ export class WorkerMessageHandler {
   ): void {
     const startTime = performance.now()
     const budget = timeBudgetMs ?? (level === 'strong' ? 1500 : 3000)
+    const deadlineMs = startTime + budget
     const evalFn = level === 'strong' ? evaluateStrong : evaluateExpert
     const tt: TranspositionTable | null = level === 'expert' ? new TranspositionTable() : null
+
+    const limits: SearchLimits = {
+      deadlineMs,
+      nodeCount: 0,
+      aborted: false,
+      checkInterval: 2048,
+    }
 
     let bestResult = { score: 0, pv: [] as number[], depth: 0 }
     let depth = 1
@@ -132,6 +140,8 @@ export class WorkerMessageHandler {
         return
       }
 
+      limits.aborted = false
+
       let result: { score: number; pv: number[] }
       if (tt) {
         result = minimaxWithABTT(
@@ -145,12 +155,34 @@ export class WorkerMessageHandler {
           cancelSignal,
           undefined,
           1,
+          0,
+          0,
+          depth === 1 ? undefined : limits,
         )
       } else {
-        result = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal, undefined, 1)
+        result = minimaxWithAB(
+          state,
+          depth,
+          -Infinity,
+          +Infinity,
+          rules,
+          evalFn,
+          cancelSignal,
+          undefined,
+          1,
+          0,
+          0,
+          depth === 1 ? undefined : limits,
+        )
       }
 
       if (cancelSignal.cancelled) {
+        sendBestResult()
+        return
+      }
+
+      // Discard aborted mid-iteration results; keep last completed depth's result
+      if (limits.aborted || isNaN(result.score)) {
         sendBestResult()
         return
       }

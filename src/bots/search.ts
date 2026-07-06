@@ -93,6 +93,11 @@ export interface TTEntry {
 
 export class TranspositionTable {
   private table = new Map<number, TTEntry>()
+  readonly maxEntries: number
+
+  constructor(maxEntries = 2_000_000) {
+    this.maxEntries = maxEntries
+  }
 
   computeHash(state: GameState): number {
     return computeZobristHash(state.board, state.currentPlayer)
@@ -111,6 +116,12 @@ export class TranspositionTable {
   set(hash: number, entry: TTEntry): void {
     const existing = this.table.get(hash)
     if (!existing || entry.depth >= existing.depth) {
+      // Cap map size. A full reset is acceptable and simple.
+      // Per-slot depth-preferred replacement cannot bound a Map keyed by hash
+      // because the hash space is too large to walk every slot.
+      if (!existing && this.table.size >= this.maxEntries) {
+        this.table.clear()
+      }
       this.table.set(hash, entry)
     }
   }
