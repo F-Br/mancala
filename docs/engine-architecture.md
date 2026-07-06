@@ -94,15 +94,15 @@ Three named evaluators, all sharing `terminalScore` and `WIN_SCORE = 10000`, `MA
 This is the same across ALL three search functions (lines 261–268, 320–325, 411–416):
 
 ```
-const isExtra = childMove?.wasExtraTurn && extraTurnChain < MAX_EXTRA_TURN_CHAIN
+const isExtra = childMove?.wasExtraTurn && extraTurnChain < MAX_EXTRA_TURN_EXTENSION
 const nextDepth = isExtra ? depth : depth - 1
 const nextChain = isExtra ? extraTurnChain + 1 : 0
 ```
 
-- **Extra-turn moves do NOT decrement the search depth** (until the chain counter `extraTurnChain` reaches `MAX_EXTRA_TURN_CHAIN = 30`).
+- **Extra-turn moves do NOT decrement the search depth** (until the chain counter `extraTurnChain` reaches `MAX_EXTRA_TURN_EXTENSION = 3`).
 - **Extra-turn scores are NOT negated** (the node is `maximizing-only` for the same player).
 - **No change to alpha/beta window** on extra turns (same `alpha, beta` passed as-in).
-- The chain cap of 30 is a safety valve: if 30 consecutive extra turns occur, depth finally decrements.
+- The chain cap of 3 is a safety valve: if 3 consecutive extra turns occur, depth finally decrements.
 
 ### Mate-distance handling
 - Terminal positions call `evalFn` (which returns ±WIN_SCORE or 0), then `adjustTerminalScore` subtracts/adds `ply` to produce `WIN_SCORE − ply` or `-WIN_SCORE + ply`.

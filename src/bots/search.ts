@@ -126,7 +126,10 @@ export class TranspositionTable {
 
 // ── Extra-Turn Chain Safety ──────────────────────────────────────────────
 
-const MAX_EXTRA_TURN_CHAIN = 30
+export const ExtraTurnConfig = {
+  MAX_EXTRA_TURN_EXTENSION: 3,
+}
+
 
 // ── Move Ordering ────────────────────────────────────────────────────────
 
@@ -253,6 +256,7 @@ function minimax(
   ply = 0,
   extraTurnChain = 0,
   limits?: SearchLimits,
+  maxExtraTurnExtension = ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
   if (limits) {
@@ -287,12 +291,12 @@ function minimax(
     if (limits?.aborted) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
-    const isExtra = childMove?.wasExtraTurn && extraTurnChain < MAX_EXTRA_TURN_CHAIN
+    const isExtra = childMove?.wasExtraTurn && extraTurnChain < maxExtraTurnExtension
     const nextDepth = isExtra ? depth : depth - 1
     const nextChain = isExtra ? extraTurnChain + 1 : 0
     const result = isExtra
-      ? minimax(child, nextDepth, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits)
-      : minimax(child, nextDepth, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits)
+      ? minimax(child, nextDepth, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits, maxExtraTurnExtension)
+      : minimax(child, nextDepth, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits, maxExtraTurnExtension)
     if (limits?.aborted) break
     const score = isExtra ? result.score : -result.score
 
@@ -323,6 +327,7 @@ function minimaxWithAB(
   ply = 0,
   extraTurnChain = 0,
   limits?: SearchLimits,
+  maxExtraTurnExtension = ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
   if (limits) {
@@ -357,12 +362,12 @@ function minimaxWithAB(
     if (limits?.aborted) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
-    const isExtra = childMove?.wasExtraTurn && extraTurnChain < MAX_EXTRA_TURN_CHAIN
+    const isExtra = childMove?.wasExtraTurn && extraTurnChain < maxExtraTurnExtension
     const nextDepth = isExtra ? depth : depth - 1
     const nextChain = isExtra ? extraTurnChain + 1 : 0
     const result = isExtra
-      ? minimaxWithAB(child, nextDepth, alpha, beta, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits)
-      : minimaxWithAB(child, nextDepth, -beta, -alpha, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits)
+      ? minimaxWithAB(child, nextDepth, alpha, beta, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits, maxExtraTurnExtension)
+      : minimaxWithAB(child, nextDepth, -beta, -alpha, rules, evalFn, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits, maxExtraTurnExtension)
     if (limits?.aborted) break
     const score = isExtra ? result.score : -result.score
 
@@ -397,6 +402,7 @@ function minimaxWithABTT(
   ply = 0,
   extraTurnChain = 0,
   limits?: SearchLimits,
+  maxExtraTurnExtension = ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
   if (limits) {
@@ -460,12 +466,12 @@ function minimaxWithABTT(
     if (limits?.aborted) break
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
-    const isExtra = childMove?.wasExtraTurn && extraTurnChain < MAX_EXTRA_TURN_CHAIN
+    const isExtra = childMove?.wasExtraTurn && extraTurnChain < maxExtraTurnExtension
     const nextDepth = isExtra ? depth : depth - 1
     const nextChain = isExtra ? extraTurnChain + 1 : 0
     const result = isExtra
-      ? minimaxWithABTT(child, nextDepth, alpha, beta, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits)
-      : minimaxWithABTT(child, nextDepth, -beta, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits)
+      ? minimaxWithABTT(child, nextDepth, alpha, beta, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits, maxExtraTurnExtension)
+      : minimaxWithABTT(child, nextDepth, -beta, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits, maxExtraTurnExtension)
     if (limits?.aborted) break
     const score = isExtra ? result.score : -result.score
 

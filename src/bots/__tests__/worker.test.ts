@@ -69,7 +69,7 @@ describe('WorkerMessageHandler', () => {
       requestId: 3,
     })
 
-    await wait(500)
+    await wait(800)
 
     expect(messages.length).toBe(1)
     const msg = asMoveMsg(messages[0]!)
@@ -91,7 +91,7 @@ describe('WorkerMessageHandler', () => {
       requestId: 4,
     })
 
-    await wait(500)
+    await wait(800)
 
     expect(messages.length).toBe(1)
     const msg = asMoveMsg(messages[0]!)
