@@ -3,7 +3,6 @@ import { useNavigate, Navigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { createInitialState, applyMove, cloneState } from '../../engine'
 import type { GameState, Move, Side, RuleConfig } from '../../engine'
-import { evaluateExpert } from '../../bots/evaluation'
 import { requestAnalysis } from '../../bots/analysisClient'
 import type { AnalysisHandle } from '../../bots/analysisClient'
 import { useGameStore, type AnalysisCacheEntry, type SavedMeta } from '../../state/gameStore'
@@ -167,7 +166,7 @@ export function ReviewScreen() {
 
       let remaining = 0
       try {
-        const handle = await requestAnalysis(pos.state, 5000)
+        const handle = await requestAnalysis(pos.state, 5000, playedMove.pitIndex)
         analysisRef.current = handle
         const result = await handle.promise
         analysisRef.current = null
@@ -189,20 +188,7 @@ export function ReviewScreen() {
             rootScores,
           })
         } else {
-          let playedEval = result.evalScore
-          const rootScore = rootScores[playedMove.pitIndex]
-          if (rootScore !== undefined) {
-            playedEval = rootScore
-          } else {
-            try {
-              const childState = applyMove(pos.state, playedMove.pitIndex, rules)
-              const childEval = evaluateExpert(childState, rules)
-              const childMove = childState.moveHistory[childState.moveHistory.length - 1]
-              playedEval = childMove?.wasExtraTurn ? childEval : -childEval
-            } catch {
-              playedEval = result.evalScore
-            }
-          }
+          const playedEval = result.exactPlayedEval ?? result.evalScore
 
           entries.push({
             bestPitIndex: result.pitIndex,

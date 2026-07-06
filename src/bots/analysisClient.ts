@@ -9,6 +9,7 @@ export interface AnalysisResult {
   depthReached: number
   rootScores: Record<number, number>
   reachedTerminal: boolean
+  exactPlayedEval?: number
 }
 
 export interface AnalysisHandle {
@@ -44,6 +45,7 @@ function getWorker(): Worker {
           depthReached: msg.depthReached,
           rootScores: msg.rootScores ?? {},
           reachedTerminal: msg.reachedTerminal ?? false,
+          exactPlayedEval: msg.exactPlayedEval,
         })
       }
     } else if (msg.type === 'error') {
@@ -71,6 +73,7 @@ function getWorker(): Worker {
 export async function requestAnalysis(
   state: GameState,
   timeBudgetMs: number,
+  playedPitIndex?: number,
 ): Promise<AnalysisHandle> {
   const w = getWorker()
   const requestId = nextRequestId++
@@ -83,6 +86,7 @@ export async function requestAnalysis(
       state,
       timeBudgetMs,
       requestId,
+      playedPitIndex,
     })
   })
 

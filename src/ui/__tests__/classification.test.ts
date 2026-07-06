@@ -82,19 +82,51 @@ describe('classifyEvalDrop — outcome-aware', () => {
     expect(classifyEvalDrop(5.0, 0.5)).toBe('blunder')     // delta 4.5
   })
 
-  it('ONGOING → LOSS uses stone-delta (large delta → blunder)', () => {
-    // best is ONGOING (5.0), played is in LOSS band
+  it('ONGOING → LOSS classifies as blunder (explicit rule)', () => {
     const best = 5.0
-    const played = -(W - M - 1)  // just inside LOSS band
+    const played = -(W - M - 1)
     const result = classifyEvalDrop(best, played)
-    // The delta is huge → should be blunder
     expect(result).toBe('blunder')
   })
 
-  it('WIN → ONGOING uses stone-delta (large delta → blunder)', () => {
+  it('WIN → ONGOING classifies as at least mistake (small delta)', () => {
+    const best = W - M + 1    // 9001 (WIN)
+    const played = W - M - 1  // 8999 (ONGOING)
+    const result = classifyEvalDrop(best, played)
+    expect(result).toBe('mistake')
+  })
+
+  it('WIN → ONGOING escalates to blunder on large delta', () => {
     const best = W - 5         // WIN
     const played = 3.0         // ONGOING
-    // Delta = (W-5) - 3.0 is huge → blunder
+    const result = classifyEvalDrop(best, played)
+    expect(result).toBe('blunder')
+  })
+
+  it('WIN → ONGOING with delta at blunder threshold (4.0) is mistake', () => {
+    const best = W - M + 1       // 9001 (WIN)
+    const played = best - 4.0    // 8997 (ONGOING, just below WIN band)
+    expect(played).toBeLessThan(W - M)
+    expect(classifyEvalDrop(best, played)).toBe('mistake')
+  })
+
+  it('WIN → ONGOING with delta just above blunder threshold (4.1) is blunder', () => {
+    const best = W - M + 1       // 9001 (WIN)
+    const played = best - 4.1    // 8996.9 (ONGOING)
+    expect(played).toBeLessThan(W - M)
+    expect(classifyEvalDrop(best, played)).toBe('blunder')
+  })
+
+  it('ONGOING → LOSS is always blunder even with small delta', () => {
+    const best = -(W - M) + 1   // -8999 (ONGOING, just above LOSS band)
+    const played = best - 2     // -9001 (LOSS, just into LOSS band)
+    const result = classifyEvalDrop(best, played)
+    expect(result).toBe('blunder')
+  })
+
+  it('ONGOING → LOSS with large delta is blunder', () => {
+    const best = 5.0
+    const played = -(W - 5)
     const result = classifyEvalDrop(best, played)
     expect(result).toBe('blunder')
   })
@@ -111,17 +143,18 @@ describe('classifyEvalDrop — outcome-aware', () => {
   })
 
   it('edge: best eval exactly at mate-band boundary', () => {
-    const boundary = W - M
-    // Score at boundary is ONGOING (not >=, so not WIN)
+    const boundary = W - M  // 9000
+    // boundary is WIN (>= 9000), boundary-0.1 is ONGOING (< 9000)
+    // WIN → ONGOING with delta 0.1: at least 'mistake'
     const result = classifyEvalDrop(boundary, boundary - 0.1)
-    expect(result).toBe('excellent')
+    expect(result).toBe('mistake')
   })
 
   it('edge: best WIN, played at border not WIN', () => {
     const best = W - M + 1   // just inside WIN band
     const played = W - M - 1 // just outside WIN band (ONGOING)
     const result = classifyEvalDrop(best, played)
-    // WIN → ONGOING: uses stone-delta = 2 → 'inaccuracy'
-    expect(result).toBe('inaccuracy')
+    // WIN → ONGOING with delta 2: at least 'mistake'
+    expect(result).toBe('mistake')
   })
 })

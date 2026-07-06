@@ -758,4 +758,4 @@ export function extractPrincipalVariation(
   return { pv, players, finalState: current, reachedTerminal: current.status === 'finished' }
 }
 
-export { minimax, minimaxWithAB, minimaxWithABTT }
+export { minimax, minimaxWithAB, minimaxWithABTT, adjustTerminalScore }

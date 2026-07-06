@@ -1,8 +1,8 @@
 import type { GameState, RuleConfig } from '../engine'
-import { KALAH_STANDARD, legalMoves } from '../engine'
-import { minimaxWithABTT, TranspositionTable, extractPrincipalVariation } from './search'
+import { KALAH_STANDARD, legalMoves, applyMove } from '../engine'
+import { minimaxWithABTT, TranspositionTable, extractPrincipalVariation, iterativeDeepening, adjustTerminalScore } from './search'
 import type { CancelSignal, SearchLimits } from './search'
-import { evaluateExpert } from './evaluation'
+import { evaluateExpert, WIN_SCORE } from './evaluation'
 import type { AnalysisMessage, AnalysisWorkerMessage, AnalysisRequest } from './types'
 
 export class AnalysisWorkerHandler {
@@ -36,11 +36,11 @@ export class AnalysisWorkerHandler {
     const cancelSignal: CancelSignal = { cancelled: false }
     this.currentCancel = cancelSignal
 
-    const { state, timeBudgetMs, requestId } = msg
+    const { state, timeBudgetMs, requestId, playedPitIndex } = msg
     const rules = KALAH_STANDARD
 
     try {
-      this.runExpertSearch(state, timeBudgetMs, rules, requestId, cancelSignal)
+      this.runExpertSearch(state, timeBudgetMs, rules, requestId, cancelSignal, playedPitIndex)
     } catch (err) {
       this.postMsg({
         type: 'error',
@@ -57,6 +57,7 @@ export class AnalysisWorkerHandler {
     rules: RuleConfig,
     requestId: number,
     cancelSignal: CancelSignal,
+    playedPitIndex: number | undefined,
   ): void {
     const startTime = performance.now()
     const budget = timeBudgetMs
@@ -103,6 +104,26 @@ export class AnalysisWorkerHandler {
         reachedTerminal = extracted.reachedTerminal
       }
 
+      let exactPlayedEval: number | undefined
+      const bestMove = bestResult.pv[0]
+      if (
+        playedPitIndex !== undefined &&
+        bestMove !== undefined &&
+        playedPitIndex !== bestMove &&
+        !cancelSignal.cancelled
+      ) {
+        const moves = legalMoves(state, rules)
+        if (moves.includes(playedPitIndex)) {
+          try {
+            exactPlayedEval = this.computeExactPlayedEval(
+              state, playedPitIndex, timeBudgetMs, rules, evalFn, tt, cancelSignal,
+            )
+          } catch {
+            // Verification failed — leave exactPlayedEval undefined
+          }
+        }
+      }
+
       this.postMsg({
         type: 'result',
         pitIndex: bestResult.pv[0] ?? -1,
@@ -112,6 +133,7 @@ export class AnalysisWorkerHandler {
         requestId,
         rootScores: bestResult.rootScores,
         reachedTerminal,
+        exactPlayedEval,
       })
       if (this.currentCancel === cancelSignal) {
         this.currentCancel = null
@@ -152,7 +174,6 @@ export class AnalysisWorkerHandler {
         return
       }
 
-      // Discard aborted mid-iteration results; keep last completed depth's result
       if (isNaN(result.score) || limits.aborted) {
         sendBestResult()
         return
@@ -165,6 +186,43 @@ export class AnalysisWorkerHandler {
     }
 
     setTimeout(iterate, 0)
+  }
+
+  private computeExactPlayedEval(
+    state: GameState,
+    playedPitIndex: number,
+    timeBudgetMs: number,
+    rules: RuleConfig,
+    evalFn: (state: GameState, rules: RuleConfig) => number,
+    tt: TranspositionTable,
+    cancelSignal: CancelSignal,
+  ): number {
+    const verificationBudget = Math.max(300, Math.floor(timeBudgetMs * 0.35))
+    const childState = applyMove(state, playedPitIndex, rules)
+    const childMove = childState.moveHistory[childState.moveHistory.length - 1]
+    const wasExtraTurn = childMove?.wasExtraTurn ?? false
+
+    let childScore: number
+
+    if (childState.status === 'finished') {
+      const base = evalFn(childState, rules)
+      childScore = base === WIN_SCORE || base === -WIN_SCORE
+        ? adjustTerminalScore(base, 1)
+        : base
+    } else {
+      const idResult = iterativeDeepening(
+        childState,
+        verificationBudget,
+        rules,
+        evalFn,
+        tt,
+        cancelSignal,
+        1,
+      )
+      childScore = idResult.score
+    }
+
+    return wasExtraTurn ? childScore : -childScore
   }
 }
 

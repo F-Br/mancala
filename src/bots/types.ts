@@ -40,6 +40,7 @@ export interface AnalysisRequest {
   state: GameState
   timeBudgetMs: number
   requestId: number
+  playedPitIndex?: number
 }
 
 export interface AnalysisCancelRequest {
@@ -56,6 +57,7 @@ export interface AnalysisResponse {
   requestId: number
   rootScores: Record<number, number>
   reachedTerminal: boolean
+  exactPlayedEval?: number
 }
 
 export interface AnalysisError {

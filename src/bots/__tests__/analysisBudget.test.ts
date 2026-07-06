@@ -4,10 +4,13 @@ import { createInitialState, cloneState, legalMoves, applyMove } from '../../eng
 import { KALAH_STANDARD } from '../../engine'
 import type { GameState } from '../../engine'
 import type { AnalysisResponse } from '../types'
+import { minimax } from '../search'
+import { evaluateExpert } from '../evaluation'
 import {
   midGameFixture1,
   midGameFixture2,
   RULES,
+  hasExtraTurnMove,
 } from './fixtures'
 
 function createTestHarness(maxTTEntries?: number) {
@@ -35,10 +38,11 @@ function createTestHarness(maxTTEntries?: number) {
     state: GameState,
     timeBudgetMs: number,
     requestId: number,
+    playedPitIndex?: number,
   ): Promise<AnalysisResponse> {
     return new Promise((resolve, reject) => {
       pending.set(requestId, { resolve, reject })
-      handler.handleMessage({ type: 'analyze', state, timeBudgetMs, requestId })
+      handler.handleMessage({ type: 'analyze', state, timeBudgetMs, requestId, playedPitIndex })
     })
   }
 
@@ -128,4 +132,94 @@ describe('TT size cap', () => {
 
     expect(sharedTTSize()).toBeLessThanOrEqual(1000)
   }, 5000)
+})
+
+describe('verification search — perspective conversion', () => {
+  it('extra-turn played move: no negation (same player perspective)', async () => {
+    // midGameFixture1: top to move, pit 11 is an extra-turn move
+    const extraPit = 11
+    const childCheck = applyMove(midGameFixture1, extraPit, RULES)
+    expect(childCheck.currentPlayer).toBe(midGameFixture1.currentPlayer)
+
+    const { analyze } = createTestHarness()
+    const result = await analyze(midGameFixture1, 600, 1, extraPit)
+
+    expect(result.exactPlayedEval).toBeDefined()
+
+    // Verify sign matches a depth-1 parent search (no AB for exact scores)
+    const rootScores: Record<number, number> = {}
+    const parentSearch = minimax(midGameFixture1, 1, RULES, evaluateExpert, undefined, rootScores, 1)
+    const parentRootScore = rootScores[extraPit]
+    expect(parentRootScore).toBeDefined()
+    expect(Math.sign(result.exactPlayedEval!)).toBe(Math.sign(parentRootScore))
+  }, 15000)
+
+  it('non-extra-turn played move: negation (opponent perspective)', async () => {
+    // midGameFixture2: bottom to move, find best move first
+    const { analyze } = createTestHarness()
+    const bestResult = await analyze(midGameFixture2, 500, 1)
+    const bestMove = bestResult.pitIndex
+
+    // Find a non-extra-turn legal move different from best move
+    const extraPit = hasExtraTurnMove(midGameFixture2)
+    const legal = legalMoves(midGameFixture2, RULES)
+    const nonExtraPit = legal.find((p) => p !== extraPit && p !== bestMove)
+    if (nonExtraPit === undefined) return
+
+    const childCheck = applyMove(midGameFixture2, nonExtraPit!, RULES)
+    expect(childCheck.currentPlayer).not.toBe(midGameFixture2.currentPlayer)
+
+    const result = await analyze(midGameFixture2, 600, 2, nonExtraPit)
+
+    expect(result.exactPlayedEval).toBeDefined()
+
+    // Verify sign matches a depth-1 parent search
+    const rootScores: Record<number, number> = {}
+    minimax(midGameFixture2, 1, RULES, evaluateExpert, undefined, rootScores, 1)
+    const parentRootScore = rootScores[nonExtraPit!]
+    expect(parentRootScore).toBeDefined()
+    expect(Math.sign(result.exactPlayedEval!)).toBe(Math.sign(parentRootScore))
+  }, 15000)
+})
+
+describe('verification search — best-move skip', () => {
+  it('exactPlayedEval is undefined when playedPitIndex is not provided', async () => {
+    const { analyze } = createTestHarness()
+    const result = await analyze(midGameFixture1, 300, 1)
+    expect(result.exactPlayedEval).toBeUndefined()
+  }, 10000)
+
+  it('exactPlayedEval is defined when playedPitIndex differs from best move', async () => {
+    // midGameFixture1: find best move first, then verify with a different legal move
+    const { analyze } = createTestHarness()
+    const bestResult = await analyze(midGameFixture1, 500, 1)
+    const bestMove = bestResult.pitIndex
+
+    const legal = legalMoves(midGameFixture1, RULES)
+    const playedPit = legal.find((p) => p !== bestMove)
+    if (playedPit === undefined) return // all legal moves are the same? unlikely
+
+    const result = await analyze(midGameFixture1, 500, 2, playedPit)
+    expect(result.exactPlayedEval).toBeDefined()
+  }, 15000)
+})
+
+describe('verification search — budget compliance', () => {
+  it('full analysis with verification (timeBudgetMs=400) finishes within 10000ms', async () => {
+    const { analyze } = createTestHarness()
+    const bestResult = await analyze(midGameFixture1, 300, 1)
+    const bestMove = bestResult.pitIndex
+
+    const legal = legalMoves(midGameFixture1, RULES)
+    const playedPit = legal.find((p) => p !== bestMove)
+    if (playedPit === undefined) return
+
+    const start = performance.now()
+    const result = await analyze(midGameFixture1, 400, 2, playedPit)
+    const elapsed = performance.now() - start
+
+    expect(elapsed).toBeLessThan(10000)
+    expect(result.exactPlayedEval).toBeDefined()
+    expect(result.principalVariation.length).toBeGreaterThan(0)
+  }, 20000)
 })

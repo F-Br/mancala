@@ -47,11 +47,14 @@ import { WIN_SCORE, MAX_PLY } from '../bots/evaluation'
  *    │ WIN → DRAW      │ 'blunder' (always flag)                 │
  *    │ WIN → LOSS      │ 'blunder' (always flag)                 │
  *    │ DRAW → LOSS     │ 'blunder' (always flag)                 │
+ *    │ WIN → ONGOING   │ at least 'mistake'; escalates to        │
+ *    │                 │ 'blunder' if delta > 4.0                │
+ *    │ ONGOING → LOSS  │ 'blunder' (always flag)                 │
  *    ├─────────────────┼─────────────────────────────────────────┤
  *    │ All other       │ Fall back to stone-delta thresholds on  │
  *    │ transitions     │ drop = bestEval - playedEval.           │
- *    │ (e.g. ONGOING   │ Examples: ONGOING→LOSS, DRAW→ONGOING,   │
- *    │  → LOSS)        │ WIN→ONGOING all use the numeric delta.  │
+ *    │ (e.g. DRAW→     │                                         │
+ *    │  ONGOING)       │                                         │
  *    └─────────────────┴─────────────────────────────────────────┘
  *
  * Note: The caller is expected to have already checked whether the played
@@ -92,6 +95,16 @@ export function classifyEvalDrop(bestEval: number, playedEval: number): Classifi
     return 'blunder'
   }
   if (bestCat === 'DRAW' && playedCat === 'LOSS') {
+    return 'blunder'
+  }
+
+  if (bestCat === 'WIN' && playedCat === 'ONGOING') {
+    const drop = bestEval - playedEval
+    if (drop > 4.0) return 'blunder'
+    return 'mistake'
+  }
+
+  if (bestCat === 'ONGOING' && playedCat === 'LOSS') {
     return 'blunder'
   }
 
