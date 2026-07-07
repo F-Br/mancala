@@ -4,12 +4,7 @@ import {
   legalMoves,
   applyMove,
   generateTablebase,
-  createTablebaseProbe,
-  createTablebaseBestMove,
-  getOffsets,
   getTotalSize,
-  encodeProven,
-  extractPits,
 } from '../engine'
 import {
   minimaxWithABTT,
@@ -23,104 +18,12 @@ import type { CancelSignal, SearchLimits, TablebaseProbe } from './search'
 import { evaluateExpert, WIN_SCORE } from './evaluation'
 import type { AnalysisMessage, AnalysisWorkerMessage, AnalysisRequest } from './types'
 import type { TbProgressMsg } from '../engine'
-
-const TB_K = 12
-const TB_RULES_VERSION = 'kalah-standard-v1'
-
-const IDB_NAME = 'mancala-tablebase'
-const IDB_STORE = 'tables'
-const IDB_KEY = `tb-k${TB_K}-${TB_RULES_VERSION}`
-
-function hasIDB(): boolean {
-  try {
-    return typeof indexedDB !== 'undefined' && typeof indexedDB.open === 'function'
-  } catch {
-    return false
-  }
-}
-
-function openIDB(): Promise<IDBDatabase> {
-  if (!hasIDB()) return Promise.reject(new Error('IndexedDB not available'))
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(IDB_NAME, 1)
-    req.onupgradeneeded = () => {
-      const db = req.result
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
-        db.createObjectStore(IDB_STORE)
-      }
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-    req.onblocked = () => reject(new Error('IDB blocked'))
-  })
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
-  const timer = new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))
-  return Promise.race([promise, timer])
-}
-
-function loadFromIDB(): Promise<Int8Array | null> {
-  if (!hasIDB()) return Promise.resolve(null)
-  return withTimeout(
-    openIDB()
-      .then((db) => {
-        return new Promise<Int8Array | null>((resolve, reject) => {
-          try {
-            const tx = db.transaction(IDB_STORE, 'readonly')
-            const store = tx.objectStore(IDB_STORE)
-            const req = store.get(IDB_KEY)
-            req.onsuccess = () => {
-              const val = req.result
-              if (val instanceof Int8Array) {
-                resolve(val)
-              } else if (val && val.buffer instanceof ArrayBuffer) {
-                resolve(new Int8Array(val.buffer))
-              } else {
-                resolve(null)
-              }
-            }
-            req.onerror = () => reject(req.error)
-          } catch (e) {
-            reject(e)
-          }
-        })
-      })
-      .catch(() => null),
-    3000,
-    null,
-  )
-}
-
-function saveToIDB(table: Int8Array): Promise<void> {
-  if (!hasIDB()) return Promise.resolve()
-  return withTimeout(
-    openIDB()
-      .then((db) => {
-        return new Promise<void>((resolve, reject) => {
-          try {
-            const tx = db.transaction(IDB_STORE, 'readwrite')
-            const store = tx.objectStore(IDB_STORE)
-            store.put(table, IDB_KEY)
-            tx.oncomplete = () => resolve()
-            tx.onerror = () => reject(tx.error)
-          } catch (e) {
-            reject(e)
-          }
-        })
-      })
-      .catch(() => {}),
-    3000,
-    undefined,
-  )
-}
+import { loadTablebaseFromIDB, saveTablebaseToIDB, buildProbes, TB_K } from './tbStore'
 
 export class AnalysisWorkerHandler {
   private currentCancel: CancelSignal | null = null
   private sharedTT: TranspositionTable
   private readonly postMsg: (msg: AnalysisWorkerMessage | TbProgressMsg) => void
-  private table: Int8Array | null = null
-  private offsets: number[] | null = null
   private probe: TablebaseProbe | null = null
   private tbBestMove: ((state: GameState) => number | undefined) | null = null
   private tbReady = false
@@ -167,11 +70,11 @@ export class AnalysisWorkerHandler {
 
   private async initTablebase(): Promise<void> {
     try {
-      const cached = await loadFromIDB()
+      const cached = await loadTablebaseFromIDB()
       if (cached && cached.length === getTotalSize(TB_K)) {
-        this.table = cached
-        this.offsets = getOffsets(TB_K)
-        this.setupProbes()
+        const { probe, tbBestMove } = buildProbes(cached)
+        this.probe = probe
+        this.tbBestMove = tbBestMove
         this.tbReady = true
         return
       }
@@ -188,9 +91,9 @@ export class AnalysisWorkerHandler {
         },
       )
 
-      this.table = table
-      this.offsets = getOffsets(TB_K)
-      this.setupProbes()
+      const { probe, tbBestMove } = buildProbes(table)
+      this.probe = probe
+      this.tbBestMove = tbBestMove
       this.tbReady = true
 
       if (nonProbeableCount > 0) {
@@ -199,36 +102,11 @@ export class AnalysisWorkerHandler {
         )
       }
 
-      saveToIDB(table).catch(() => {})
+      saveTablebaseToIDB(table).catch(() => {})
     } catch (err) {
       console.error('Tablebase generation failed:', err)
       // Continue without tablebase — search works normally
     }
-  }
-
-  private setupProbes(): void {
-    if (!this.table || !this.offsets) return
-
-    const probeFn = createTablebaseProbe(this.table, this.offsets, TB_K)
-
-    this.probe = (state: GameState): number | undefined => {
-      if (state.status !== 'in-progress') return undefined
-      const pits = extractPits(state.board)
-      const tb = probeFn(pits, state.currentPlayer)
-      if (tb === undefined) return undefined
-
-      const ownStore = state.currentPlayer === 'bottom' ? 6 : 13
-      const oppStore = state.currentPlayer === 'bottom' ? 13 : 6
-      const sd = (state.board[ownStore] ?? 0) - (state.board[oppStore] ?? 0)
-      return encodeProven(sd + tb)
-    }
-
-    this.tbBestMove = createTablebaseBestMove(
-      this.table,
-      this.offsets,
-      TB_K,
-      KALAH_STANDARD,
-    )
   }
 
   private handleAnalyze(msg: AnalysisRequest): void {

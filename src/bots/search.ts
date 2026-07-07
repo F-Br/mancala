@@ -221,32 +221,48 @@ function quiesce(
   const moves = legalMoves(state, rules)
   if (moves.length === 0) return { score: standPat, pv: [] }
 
-  const { pitsPerSide } = rules
-  const ownStart = state.currentPlayer === 'bottom' ? 0 : pitsPerSide + 1
-  const ownEnd = state.currentPlayer === 'bottom' ? pitsPerSide - 1 : pitsPerSide * 2
-  let hasEmptyPit = false
-  for (let i = ownStart; i <= ownEnd && !hasEmptyPit; i++) {
-    if ((state.board[i] ?? 0) === 0) hasEmptyPit = true
+  // Collect quiescence moves: captures and extra-turn moves.
+  // Historically ordering was deliberately omitted; with the wider move set
+  // (extra-turn moves added alongside captures) it now pays to sort.
+  interface QMove { pit: number; captured: number; wasExtraTurn: boolean }
+  const qMoves: QMove[] = []
+  for (const pit of moves) {
+    const child = applyMove(state, pit, rules)
+    const lastMove = child.moveHistory[child.moveHistory.length - 1]
+    if (!lastMove?.captured && !lastMove?.wasExtraTurn) continue
+    qMoves.push({
+      pit,
+      captured: lastMove?.captured?.count ?? 0,
+      wasExtraTurn: lastMove?.wasExtraTurn ?? false,
+    })
   }
-  if (!hasEmptyPit) return { score: standPat, pv: [] }
+
+  if (qMoves.length === 0) return { score: standPat, pv: [] }
+
+  // Order: capture moves first, sorted by captured stone count descending,
+  // then extra-turn moves.
+  qMoves.sort((a, b) => {
+    if (a.captured > 0 && b.captured === 0) return -1
+    if (a.captured === 0 && b.captured > 0) return 1
+    if (a.captured > 0) return b.captured - a.captured
+    return 0
+  })
 
   let bestScore = standPat
   let bestPV: number[] = []
 
-  for (const pit of moves) {
-    const child = applyMove(state, pit, rules)
-    const lastMove = child.moveHistory[child.moveHistory.length - 1]
-    if (!lastMove?.captured) continue
+  for (const qMove of qMoves) {
+    const child = applyMove(state, qMove.pit, rules)
 
-    const result = lastMove?.wasExtraTurn
+    const result = qMove.wasExtraTurn
       ? quiesce(child, qDepth + 1, alpha, beta, rules, evalFn, cancelSignal, ply + 1, limits, tablebase)
       : quiesce(child, qDepth + 1, -beta, -alpha, rules, evalFn, cancelSignal, ply + 1, limits, tablebase)
     if (limits?.aborted) break
-    const score = lastMove?.wasExtraTurn ? result.score : -result.score
+    const score = qMove.wasExtraTurn ? result.score : -result.score
 
     if (score > bestScore) {
       bestScore = score
-      bestPV = [pit, ...result.pv]
+      bestPV = [qMove.pit, ...result.pv]
     }
     if (score > alpha) alpha = score
     if (alpha >= beta) break

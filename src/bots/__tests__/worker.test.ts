@@ -1,7 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import { WorkerMessageHandler } from '../worker'
 import type { BotWorkerMessage } from '../types'
-import { createInitialState } from '../../engine'
+import {
+  createInitialState,
+  generateTablebase,
+  createTablebaseProbe,
+  pickTablebaseMove,
+  extractPits,
+  getOffsets,
+  encodeProven,
+  KALAH_STANDARD,
+} from '../../engine'
+import type { GameState } from '../../engine'
+import type { TablebaseProbe } from '../search'
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -149,5 +160,79 @@ describe('WorkerMessageHandler', () => {
     const msg = asMoveMsg(messages[0]!)
     expect(msg.type).toBe('move')
     expect(msg.requestId).toBe(7)
+  })
+})
+
+describe('Expert tablebase integration', () => {
+  it('Expert with injected tablebase picks the tablebase argmax on ≤K-stone fixture', { timeout: 30000 }, async () => {
+    const K = 6
+    const rules = KALAH_STANDARD
+    const { table } = generateTablebase(K, rules)
+    const offsets = getOffsets(K)
+
+    // Board with ≤K pit stones where bottom has a clear best move:
+    // pit 0 (1 stone) → pit 1 (empty) → captures opposite pit 11 (5 stones).
+    // Top has no other stones; bottom wins after the capture.
+    const board = new Array<number>(14).fill(0) as number[]
+    board[0] = 1
+    board[11] = 5
+    board[6] = 15
+    board[13] = 10
+    const state: GameState = {
+      board,
+      currentPlayer: 'bottom',
+      status: 'in-progress',
+      winner: null,
+      moveHistory: [],
+    }
+
+    // TB argmax for the root position
+    const pits = extractPits(state.board)
+    const tbArgMax = pickTablebaseMove(pits, state.currentPlayer, rules, table, offsets, K)
+    expect(tbArgMax).toBeDefined()
+
+    // Build the probe (same shape as buildProbes)
+    const probeFn = createTablebaseProbe(table, offsets, K)
+    const probe: TablebaseProbe = (s: GameState): number | undefined => {
+      if (s.status !== 'in-progress') return undefined
+      const p = extractPits(s.board)
+      const tb = probeFn(p, s.currentPlayer)
+      if (tb === undefined) return undefined
+      const ownStore = s.currentPlayer === 'bottom' ? 6 : 13
+      const oppStore = s.currentPlayer === 'bottom' ? 13 : 6
+      const sd = (s.board[ownStore] ?? 0) - (s.board[oppStore] ?? 0)
+      return encodeProven(sd + tb)
+    }
+
+    const tbBestMove = (s: GameState): number | undefined => {
+      const p = extractPits(s.board)
+      return pickTablebaseMove(p, s.currentPlayer, rules, table, offsets, K)
+    }
+
+    // Inject in-memory table (bypass IDB)
+    const messages: BotWorkerMessage[] = []
+    const handler = new WorkerMessageHandler((msg) => messages.push(msg))
+    ;(handler as any).probe = probe
+    ;(handler as any).tbBestMove = tbBestMove
+    ;(handler as any).tbReady = true
+    ;(handler as any).tbLoadInFlight = true
+
+    handler.handleMessage({
+      type: 'pickMove',
+      state,
+      level: 'expert',
+      timeBudgetMs: 5000,
+      requestId: 100,
+    })
+
+    await wait(6000)
+
+    expect(messages.length).toBe(1)
+    const msg = asMoveMsg(messages[0]!)
+    expect(msg.type).toBe('move')
+    expect(msg.requestId).toBe(100)
+
+    // Expert with tablebase should pick the TB argmax
+    expect(msg.pitIndex).toBe(tbArgMax)
   })
 })
