@@ -34,6 +34,10 @@ export const strings = {
     bottom: 'Bottom',
     random: 'Random',
     startGame: 'Start Game',
+    beginnerDesc: 'Plays random moves. Great for learning the rules.',
+    casualDesc: 'Looks a few moves ahead.',
+    strongDesc: 'Searches deeply with a fast time limit.',
+    expertDesc: 'Full-strength search. A serious challenge.',
   },
   game: {
     you: 'You',
