@@ -27,6 +27,8 @@ import {
   replayPositions,
   ANALYSIS_POSITION_BUDGET_MS,
   ANALYSIS_CEILING_MS_PER_POSITION,
+  isCacheHealthy,
+  isPVActive,
   type PositionInfo,
   type BatchProgress,
 } from '../batchAnalysis'
@@ -116,7 +118,7 @@ export function ReviewScreen() {
     return replayPositions(gameState, firstPlayer, rules)
   }, [gameState, firstPlayer, rules])
 
-  const runBatchAnalysis = useCallback(async () => {
+  const runBatchAnalysis = useCallback(async (signal: { cancelled: boolean }) => {
     if (!gameState || positions.length <= 1) return
     const moveCount = gameState.moveHistory.length
     setAnalyzing(true)
@@ -155,9 +157,12 @@ export function ReviewScreen() {
         }
         setProgress({ current: p.current, total: p.total, remaining })
       },
+      signal,
     })
 
     setOnTBProgress(null)
+
+    if (signal.cancelled) return
 
     const entries: AnalysisCacheEntry[] = batchResult.map((r) => r.entry)
     setLocalCache(entries)
@@ -168,8 +173,13 @@ export function ReviewScreen() {
   }, [gameState, positions, rules, setAnalysisCache])
 
   useEffect(() => {
-    if (cache) return
-    runBatchAnalysis()
+    if (cache && isCacheHealthy(cache)) return
+    const signal = { cancelled: false }
+    runBatchAnalysis(signal)
+    return () => {
+      signal.cancelled = true
+      if (analysisRef.current) analysisRef.current.cancel()
+    }
   }, [cache, runBatchAnalysis])
 
   useEffect(() => {
@@ -201,6 +211,8 @@ export function ReviewScreen() {
 
   const currentPos = positions[currentIndex]
   const currentEntry = cache ? cache[currentIndex] : null
+
+  const pvActive = isPVActive(showPV, pvIndexAtStart.current, currentIndex)
 
   const isHumanTurn =
     currentPos &&
@@ -344,17 +356,17 @@ export function ReviewScreen() {
       ? playerSide === 'bottom'
       : true
 
-  const displayState = showPV && pvStates[pvStep] ? pvStates[pvStep] : (currentPos?.state ?? null)
+  const displayState = pvActive && pvStates[pvStep] ? pvStates[pvStep] : (currentPos?.state ?? null)
 
   const accentPitForDisplay =
-    showPV && pvMoves[pvStep] != null
+    pvActive && pvMoves[pvStep] != null
       ? pvMoves[pvStep]
       : currentEntry && currentEntry.bestPitIndex >= 0
         ? currentEntry.bestPitIndex
         : null
 
   const secondaryAccentPit =
-    showPV
+    pvActive
       ? null
       : currentPos?.move?.pitIndex ?? null
 
@@ -632,7 +644,7 @@ export function ReviewScreen() {
                 </span>
               )}
 
-              {playedMoveNotBest && !showPV && currentEntry && (
+              {playedMoveNotBest && !pvActive && currentEntry && (
                 <>
                   <span>
                     {strings.review.recommended}:{' '}
@@ -652,7 +664,7 @@ export function ReviewScreen() {
               )}
             </div>
 
-            {playedMoveNotBest && !showPV && isHumanTurn && (
+            {playedMoveNotBest && !pvActive && isHumanTurn && (
               <button
                 type="button"
                 onClick={handlePVPlayback}
@@ -662,7 +674,7 @@ export function ReviewScreen() {
               </button>
             )}
 
-            {showPV && (
+            {pvActive && (
               <motion.div
                 initial={{ opacity: 0, y: 2 }}
                 animate={{ opacity: 1, y: 0 }}

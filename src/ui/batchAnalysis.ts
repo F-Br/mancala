@@ -149,23 +149,38 @@ export async function executeBatchAnalysis({
         },
         reachedTerminal: result.reachedTerminal ?? false,
       })
-    } catch {
-      results.push({
-        entry: {
-          bestPitIndex: -1,
-          bestEval: 0,
-          pv: [],
-          depth: 0,
-          playedEval: 0,
-          rootScores: {},
+      } catch {
+        if (signal?.cancelled) break
+        results.push({
+          entry: {
+            bestPitIndex: -1,
+            bestEval: 0,
+            pv: [],
+            depth: 0,
+            playedEval: 0,
+            rootScores: {},
+            reachedTerminal: false,
+          },
           reachedTerminal: false,
-        },
-        reachedTerminal: false,
-      })
-    }
+        })
+      }
 
     onProgress?.({ current: i + 1, total: moveCount, remainingS })
   }
 
   return results
+}
+
+export function isCacheHealthy(entries: AnalysisCacheEntry[]): boolean {
+  for (const entry of entries) {
+    if (!entry) continue
+    if (entry.bestPitIndex < 0) return false
+    if (!('reachedTerminal' in entry)) return false
+    if (entry.bestPitIndex >= 0 && entry.pv.length <= 1 && entry.reachedTerminal !== true) return false
+  }
+  return true
+}
+
+export function isPVActive(showPV: boolean, startIndex: number | null, currentIndex: number): boolean {
+  return showPV && startIndex === currentIndex
 }
