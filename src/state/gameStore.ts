@@ -19,7 +19,7 @@ export interface AnalysisCacheEntry {
 export interface SavedMeta {
   mode: GameMode
   botLevel: BotLevel
-  playerSide: Side | 'random'
+  playerSide: Side
 }
 
 export interface GameStore {

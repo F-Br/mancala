@@ -33,6 +33,7 @@ export const strings = {
     top: 'Top',
     bottom: 'Bottom',
     random: 'Random',
+    sideHint: 'Bottom moves first.',
     startGame: 'Start Game',
     beginnerDesc: 'Plays random moves. Great for learning the rules.',
     casualDesc: 'Looks a few moves ahead.',

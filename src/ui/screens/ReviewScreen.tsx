@@ -17,6 +17,7 @@ import { classifyEvalDrop } from '../classification'
 import { shareGame } from '../share'
 import { gameToText } from '../../engine'
 import { strings } from '../strings'
+import { coerceLegacySide } from '../../util/side'
 import { Board } from '../components/Board'
 import { Chip } from '../components/Chip'
 import { ScorePanel } from '../components/ScorePanel'
@@ -47,7 +48,7 @@ function notatePit(p: number): string {
 
 function playerLabel(pos: PositionInfo, savedMeta: SavedMeta | null): string {
   if (savedMeta?.mode === 'vs-bot') {
-    const human = savedMeta.playerSide === 'random' ? 'bottom' : savedMeta.playerSide
+    const human = coerceLegacySide(savedMeta.playerSide)
     return pos.player === human ? strings.game.you : strings.game.bot
   }
   return pos.player === 'bottom' ? strings.game.player1 : strings.game.player2
@@ -55,7 +56,7 @@ function playerLabel(pos: PositionInfo, savedMeta: SavedMeta | null): string {
 
 function playerNameShort(side: Side, savedMeta: SavedMeta | null): string {
   if (savedMeta?.mode === 'vs-bot') {
-    const human = savedMeta.playerSide === 'random' ? 'bottom' : savedMeta.playerSide
+    const human = coerceLegacySide(savedMeta.playerSide)
     return side === human ? strings.game.you : strings.game.bot
   }
   return side === 'bottom' ? strings.game.player1 : strings.game.player2
@@ -63,7 +64,7 @@ function playerNameShort(side: Side, savedMeta: SavedMeta | null): string {
 
 function isHumanPos(pos: PositionInfo, savedMeta: SavedMeta | null): boolean {
   if (savedMeta?.mode !== 'vs-bot') return false
-  const human = savedMeta.playerSide === 'random' ? 'bottom' : savedMeta.playerSide
+  const human = coerceLegacySide(savedMeta.playerSide)
   return pos.player === human
 }
 
@@ -105,9 +106,7 @@ export function ReviewScreen() {
 
   const playerSide: Side | null =
     savedMeta?.mode === 'vs-bot'
-      ? savedMeta.playerSide === 'random'
-        ? 'bottom'
-        : savedMeta.playerSide
+      ? coerceLegacySide(savedMeta.playerSide)
       : null
 
   const cache = localCache ?? analysisCache

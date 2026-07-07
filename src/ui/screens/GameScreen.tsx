@@ -21,6 +21,7 @@ import {
   playGameEndDraw,
 } from '../../audio/sounds'
 import { triggerHaptic } from '../../util/haptics'
+import { resolveSidePreference, coerceLegacySide } from '../../util/side'
 import { Board } from '../components/Board'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
@@ -153,7 +154,7 @@ export function GameScreen() {
 
   const isVsBot = mode === 'vs-bot'
 
-  const humanSide: Side | null = isVsBot ? (playerSide === 'random' ? 'bottom' : playerSide) : null
+  const humanSide: Side | null = isVsBot ? (savedMeta?.playerSide ?? coerceLegacySide(playerSide)) : null
 
   const clickablePits = useMemo(() => {
     if (!gameState || gameState.status !== 'in-progress') return []
@@ -293,7 +294,7 @@ export function GameScreen() {
     if (!meta.mode) return
 
     const humanSideActual =
-      meta.mode === 'vs-bot' ? (meta.playerSide === 'random' ? 'bottom' : meta.playerSide) : null
+      meta.mode === 'vs-bot' ? coerceLegacySide(meta.playerSide) : null
 
     const playerScore = gs.board[humanSideActual === 'top' ? 13 : 6]!
     const opponentScore = gs.board[humanSideActual === 'top' ? 6 : 13]!
@@ -316,7 +317,7 @@ export function GameScreen() {
       id: crypto.randomUUID(),
       mode: meta.mode,
       botLevel: meta.botLevel,
-      playerSide: meta.playerSide,
+      playerSide: coerceLegacySide(meta.playerSide),
       opponentLabel,
       result,
       finalScore: { player: playerScore, opponent: opponentScore },
@@ -358,10 +359,10 @@ export function GameScreen() {
     setBoardLocked(false)
     setPendingMove(null)
     setPrevBoard(null)
-    const fp = humanSide ?? 'bottom'
-    reset(fp)
-    if (mode) setSavedMeta({ mode, botLevel, playerSide })
-  }, [cancelBot, cancelAnalysis, reset, humanSide, mode, botLevel, playerSide, setSavedMeta])
+    const resolved = resolveSidePreference(playerSide)
+    reset('bottom')
+    if (mode) setSavedMeta({ mode, botLevel, playerSide: resolved })
+  }, [cancelBot, cancelAnalysis, reset, mode, botLevel, playerSide, setSavedMeta])
 
   const handleHome = useCallback(() => {
     cancelBot()
@@ -442,12 +443,10 @@ export function GameScreen() {
     if (gs.gameState && gs.savedMeta) {
       useModeStore.getState().setMode(gs.savedMeta.mode)
       useModeStore.getState().setBotLevel(gs.savedMeta.botLevel)
-      if (gs.savedMeta.mode === 'vs-bot') {
-        useModeStore.getState().setPlayerSide(gs.savedMeta.playerSide)
-      }
     } else if (!gs.gameState && mode) {
-      reset()
-      setSavedMeta({ mode, botLevel, playerSide })
+      const resolved = resolveSidePreference(playerSide)
+      reset('bottom')
+      setSavedMeta({ mode, botLevel, playerSide: resolved })
     }
   }, [mode, botLevel, playerSide, reset, setSavedMeta])
 

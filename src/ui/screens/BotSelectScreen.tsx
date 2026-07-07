@@ -112,6 +112,9 @@ export function BotSelectScreen() {
                   )
                 })}
               </div>
+              <p className="text-label text-muted/60 text-right mt-0.5">
+                {strings.botSelect.sideHint}
+              </p>
             </div>
           </div>
         </Card>

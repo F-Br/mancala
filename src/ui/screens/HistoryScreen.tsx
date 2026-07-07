@@ -5,6 +5,7 @@ import { useGameStore } from '../../state/gameStore'
 import { useHistoryStore } from '../../state/historyStore'
 import type { AnalysisCacheEntry } from '../../state/gameStore'
 import type { BotLevel } from '../../bots/types'
+import { coerceLegacySide } from '../../util/side'
 import { EvalGraphSparkline, type EvalGraphPoint } from '../components/EvalGraph'
 import { Card } from '../components/Card'
 import { Chip } from '../components/Chip'
@@ -266,7 +267,7 @@ export function HistoryScreen() {
       savedMeta: {
         mode: record.mode,
         botLevel: record.botLevel ?? 'beginner',
-        playerSide: record.playerSide,
+        playerSide: coerceLegacySide(record.playerSide),
       },
       analysisCache: record.analysisResult ?? null,
     })

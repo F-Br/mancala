@@ -8,7 +8,7 @@ export interface GameRecord {
   id: string
   mode: 'vs-bot' | 'local-2p'
   botLevel?: BotLevel
-  playerSide: Side | 'random'
+  playerSide: Side
   opponentLabel: string
   result: 'win' | 'loss' | 'draw'
   finalScore: { player: number; opponent: number }
