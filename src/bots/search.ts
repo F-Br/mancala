@@ -146,25 +146,47 @@ export const ExtraTurnConfig = {
 
 // ── Move Ordering ────────────────────────────────────────────────────────
 
+const HISTORY_MAX = 1 << 24
+
 function orderMoves(
   moves: number[],
   state: GameState,
   rules: RuleConfig,
   ttBestMove?: number,
+  killers?: number[],
+  historyTable?: number[][],
+  prevRootScores?: Record<number, number>,
 ): number[] {
   const scored = moves.map((pit) => {
     let score = state.board[pit] ?? 0
 
     if (pit === ttBestMove) score += 10000
 
+    if (prevRootScores && prevRootScores[pit] !== undefined) {
+      score += 5000 + prevRootScores[pit]! * 0.5
+    }
+
     const ownStore = state.currentPlayer === 'bottom' ? BOTTOM_STORE : TOP_STORE
     const distToStore = (ownStore - pit + BOARD_LENGTH) % BOARD_LENGTH || BOARD_LENGTH
-    if (score === distToStore) score += 50
+    const stonesInPit = state.board[pit] ?? 0
+    if (stonesInPit === distToStore) score += 50
 
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
     if (childMove?.captured) score += 100
-    if (childMove?.wasExtraTurn && score !== distToStore) score += 25
+
+    if (killers) {
+      if (pit === killers[0]) score += 75
+      else if (pit === killers[1]) score += 75
+    }
+
+    if (childMove?.wasExtraTurn && stonesInPit !== distToStore) score += 25
+
+    if (historyTable) {
+      const sideIdx = state.currentPlayer === 'bottom' ? 0 : 1
+      const h = historyTable[sideIdx]![pit] ?? 0
+      score += Math.min(h, 6400) / 256
+    }
 
     return { pit, score }
   })
@@ -439,6 +461,11 @@ function minimaxWithABTT(
   limits?: SearchLimits,
   maxExtraTurnExtension = ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION,
   tablebase?: TablebaseProbe,
+  killers?: number[][],
+  historyTable?: number[][],
+  usePVS = false,
+  prevRootScores?: Record<number, number>,
+  nullWinNoWrite = false,
 ): SearchResult {
   if (cancelSignal?.cancelled) return { score: 0, pv: [] }
   if (limits) {
@@ -499,9 +526,10 @@ function minimaxWithABTT(
     return { score: evalFn(state, rules), pv: [] }
   }
 
-  const ordered = orderMoves(moves, state, rules, ttBestMove)
+  const ordered = orderMoves(moves, state, rules, ttBestMove, killers?.[ply], historyTable, ply === 0 ? prevRootScores : undefined)
   let bestScore = -Infinity
   let bestPV: number[] = []
+  let isFirstChild = true
 
   for (const pit of ordered) {
     if (cancelSignal?.cancelled) break
@@ -511,11 +539,42 @@ function minimaxWithABTT(
     const isExtra = childMove?.wasExtraTurn && extraTurnChain < maxExtraTurnExtension
     const nextDepth = isExtra ? depth : depth - 1
     const nextChain = isExtra ? extraTurnChain + 1 : 0
-    const result = isExtra
-      ? minimaxWithABTT(child, nextDepth, alpha, beta, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits, maxExtraTurnExtension, tablebase)
-      : minimaxWithABTT(child, nextDepth, -beta, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits, maxExtraTurnExtension, tablebase)
-    if (limits?.aborted) break
-    const score = isExtra ? result.score : -result.score
+
+    let score: number
+    let childPV: number[]
+
+    if (!isFirstChild && usePVS) {
+      // Null-window search: skip TT writes to guarantee correctness
+      const nullResult = isExtra
+        ? minimaxWithABTT(child, nextDepth, alpha, alpha + 1, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits, maxExtraTurnExtension, tablebase, killers, historyTable, false, undefined, true)
+        : minimaxWithABTT(child, nextDepth, -alpha - 1, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits, maxExtraTurnExtension, tablebase, killers, historyTable, false, undefined, true)
+
+      if (limits?.aborted) break
+      const nullScore = isExtra ? nullResult.score : -nullResult.score
+
+      if (nullScore > alpha) {
+        // Re-search with full window
+        const fullResult = isExtra
+          ? minimaxWithABTT(child, nextDepth, alpha, beta, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits, maxExtraTurnExtension, tablebase, killers, historyTable, usePVS, undefined, nullWinNoWrite)
+          : minimaxWithABTT(child, nextDepth, -beta, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits, maxExtraTurnExtension, tablebase, killers, historyTable, usePVS, undefined, nullWinNoWrite)
+
+        if (limits?.aborted) break
+        score = isExtra ? fullResult.score : -fullResult.score
+        childPV = fullResult.pv
+      } else {
+        isFirstChild = false
+        continue
+      }
+    } else {
+      // Full-window search (first child or PVS disabled)
+      const result = isExtra
+        ? minimaxWithABTT(child, nextDepth, alpha, beta, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, nextChain, limits, maxExtraTurnExtension, tablebase, killers, historyTable, usePVS, undefined, nullWinNoWrite)
+        : minimaxWithABTT(child, nextDepth, -beta, -alpha, rules, evalFn, tt, cancelSignal, undefined, quiesceDepth, ply + 1, 0, limits, maxExtraTurnExtension, tablebase, killers, historyTable, usePVS, undefined, nullWinNoWrite)
+
+      if (limits?.aborted) break
+      score = isExtra ? result.score : -result.score
+      childPV = result.pv
+    }
 
     if (rootScores !== undefined) {
       rootScores[pit] = score
@@ -523,17 +582,39 @@ function minimaxWithABTT(
 
     if (score > bestScore) {
       bestScore = score
-      bestPV = [pit, ...result.pv]
+      bestPV = [pit, ...childPV]
     }
 
     if (score > alpha) alpha = score
-    if (alpha >= beta) break
+    if (alpha >= beta) {
+      // Record killer and history for non-capture beta cutoffs
+      if (killers && !childMove?.captured) {
+        const k = killers[ply] ?? (killers[ply] = [0, 0])
+        if (k[0] !== pit) {
+          k[1] = k[0]!
+          k[0] = pit
+        }
+      }
+      if (historyTable && !childMove?.captured) {
+        const sideIdx = state.currentPlayer === 'bottom' ? 0 : 1
+        historyTable[sideIdx]![pit]! += depth * depth
+        if (historyTable[sideIdx]![pit]! >= HISTORY_MAX) {
+          for (let s = 0; s < 2; s++) {
+            for (let p = 0; p < 14; p++) {
+              historyTable[s]![p]! >>= 1
+            }
+          }
+        }
+      }
+      break
+    }
+    isFirstChild = false
   }
 
   if (limits?.aborted) return { score: NaN, pv: [] }
 
   const bestMove = bestPV[0]
-  if (bestMove !== undefined) {
+  if (!nullWinNoWrite && bestMove !== undefined) {
     let flag: TTEntry['flag']
     if (bestScore <= originalAlpha) {
       flag = 'upper'
@@ -566,6 +647,7 @@ export function iterativeDeepening(
   quiesceDepth?: number,
   maxDepth?: number,
   tablebase?: TablebaseProbe,
+  usePVS = true,
 ): IterativeResult {
   const startTime = performance.now()
   let bestResult: IterativeResult = { score: 0, pv: [], depth: 0, rootScores: {} }
@@ -586,6 +668,11 @@ export function iterativeDeepening(
     checkInterval: 2048,
   }
 
+  const killers: number[][] | undefined = usePVS && tt ? [] : undefined
+  const historyTable: number[][] | undefined = usePVS && tt ? [new Array<number>(14).fill(0), new Array<number>(14).fill(0)] : undefined
+
+  let prevRootScores: Record<number, number> | undefined
+
   for (let depth = 1; ; depth++) {
     if (cancelSignal?.cancelled) break
     if (maxDepth !== undefined && depth > maxDepth) break
@@ -604,7 +691,7 @@ export function iterativeDeepening(
 
     let result: SearchResult
     if (tt) {
-      result = minimaxWithABTT(state, depth, alpha, beta, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits, ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION, tablebase)
+      result = minimaxWithABTT(state, depth, alpha, beta, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits, ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION, tablebase, killers, historyTable, usePVS, depth > 1 ? prevRootScores : undefined)
     } else {
       result = minimaxWithAB(state, depth, alpha, beta, rules, evalFn, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits)
     }
@@ -619,7 +706,7 @@ export function iterativeDeepening(
     if (useAspiration && (result.score <= alpha || result.score >= beta)) {
       let reResult: SearchResult
       if (tt) {
-        reResult = minimaxWithABTT(state, depth, -Infinity, +Infinity, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits, ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION, tablebase)
+        reResult = minimaxWithABTT(state, depth, -Infinity, +Infinity, rules, evalFn, tt, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits, ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION, tablebase, killers, historyTable, usePVS, depth > 1 ? prevRootScores : undefined)
       } else {
         reResult = minimaxWithAB(state, depth, -Infinity, +Infinity, rules, evalFn, cancelSignal, rootScores, quiesceDepth, 0, 0, useLimits)
       }
@@ -630,6 +717,7 @@ export function iterativeDeepening(
 
     prevScore = result.score
     bestResult = { score: result.score, pv: result.pv, depth, rootScores }
+    prevRootScores = rootScores
 
     if (bestResult.score > WIN_SCORE - MAX_PLY) break
     if (performance.now() - startTime >= timeBudgetMs) break
@@ -687,9 +775,10 @@ export function pickMoveExpert(
   rules: RuleConfig,
   timeBudgetMs = 3000,
   cancelSignal?: CancelSignal,
+  usePVS = true,
 ): IterativeResult {
   const tt = new TranspositionTable()
-  return iterativeDeepening(state, timeBudgetMs, rules, evaluateExpert, tt, cancelSignal)
+  return iterativeDeepening(state, timeBudgetMs, rules, evaluateExpert, tt, cancelSignal, undefined, undefined, undefined, usePVS)
 }
 
 // ── Principal Variation Extraction via Re-search ─────────────────────────

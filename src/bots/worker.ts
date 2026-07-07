@@ -138,7 +138,11 @@ export class WorkerMessageHandler {
       checkInterval: 2048,
     }
 
+    const killers: number[][] | undefined = tt ? [] : undefined
+    const historyTable: number[][] | undefined = tt ? [new Array<number>(14).fill(0), new Array<number>(14).fill(0)] : undefined
+
     let bestResult = { score: 0, pv: [] as number[], depth: 0 }
+    let prevRootScores: Record<number, number> | undefined
     let depth = 1
 
     const sendBestResult = (): void => {
@@ -189,6 +193,8 @@ export class WorkerMessageHandler {
 
       limits.aborted = false
 
+      const rootScores: Record<number, number> = {}
+
       let result: { score: number; pv: number[] }
       if (tt) {
         result = minimaxWithABTT(
@@ -200,13 +206,17 @@ export class WorkerMessageHandler {
           evalFn,
           tt,
           cancelSignal,
-          undefined,
+          rootScores,
           1,
           0,
           0,
           depth === 1 ? undefined : limits,
           ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION,
           this.probe ?? undefined,
+          killers,
+          historyTable,
+          true,
+          depth > 1 ? prevRootScores : undefined,
         )
       } else {
         result = minimaxWithAB(
@@ -217,7 +227,7 @@ export class WorkerMessageHandler {
           rules,
           evalFn,
           cancelSignal,
-          undefined,
+          rootScores,
           1,
           0,
           0,
@@ -237,6 +247,7 @@ export class WorkerMessageHandler {
       }
 
       bestResult = { score: result.score, pv: result.pv, depth }
+      prevRootScores = rootScores
 
       if (bestResult.score > WIN_SCORE - MAX_PLY) {
         sendBestResult()

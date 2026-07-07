@@ -17,7 +17,7 @@ import { evaluateSimple, WIN_SCORE, MAX_PLY } from '../evaluation'
 import { createInitialState, applyMove, legalMoves, cloneState } from '../../engine'
 import { BOTTOM_STORE, TOP_STORE } from '../../engine'
 import type { GameState, RuleConfig } from '../../engine'
-import { midGameFixture1, midGameFixture2 } from './fixtures'
+import { midGameFixture1, midGameFixture2, lateGameFixture, initialFixture } from './fixtures'
 
 const RULES: RuleConfig = {
   pitsPerSide: 6,
@@ -1025,4 +1025,112 @@ describe('quiescence node-count sanity', () => {
     expect(nodes).toBeGreaterThan(0)
     expect(nodes).toBeLessThan(350_000)
   })
+})
+
+describe('PVS + killer + history equivalence', () => {
+  function runSearch(
+    state: GameState,
+    depth: number,
+    usePVS: boolean,
+  ): { score: number; bestMove: number | undefined } {
+    const tt = new TranspositionTable()
+    const killers: number[][] | undefined = usePVS ? [] : undefined
+    const historyTable: number[][] | undefined = usePVS ? [new Array<number>(14).fill(0), new Array<number>(14).fill(0)] : undefined
+    const result = minimaxWithABTT(
+      state, depth, -Infinity, +Infinity, RULES, evaluateSimple, tt,
+      undefined, undefined, undefined, 0, 0, undefined,
+      ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION, undefined,
+      killers, historyTable, usePVS, undefined,
+    )
+    return { score: result.score, bestMove: result.pv[0] }
+  }
+
+  function runSearchWithLimits(
+    state: GameState,
+    depth: number,
+    usePVS: boolean,
+  ): { score: number; bestMove: number | undefined; nodeCount: number } {
+    const tt = new TranspositionTable()
+    const killers: number[][] | undefined = usePVS ? [] : undefined
+    const historyTable: number[][] | undefined = usePVS ? [new Array<number>(14).fill(0), new Array<number>(14).fill(0)] : undefined
+    const limits: SearchLimits = { deadlineMs: null, nodeCount: 0, aborted: false, checkInterval: 2048 }
+    const result = minimaxWithABTT(
+      state, depth, -Infinity, +Infinity, RULES, evaluateSimple, tt,
+      undefined, undefined, undefined, 0, 0, limits,
+      ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION, undefined,
+      killers, historyTable, usePVS, undefined,
+    )
+    return { score: result.score, bestMove: result.pv[0], nodeCount: limits.nodeCount }
+  }
+
+  const fixtures: Record<string, GameState> = {
+    initial: initialFixture,
+    midGame1: midGameFixture1,
+    midGame2: midGameFixture2,
+    lateGame: lateGameFixture,
+  }
+
+  const equivDepths = [6, 7, 8]
+
+  for (const depth of equivDepths) {
+    it(`identical root score and best move at depth ${depth} for all fixtures`, () => {
+      for (const [name, state] of Object.entries(fixtures)) {
+        const pvs = runSearch(state, depth, true)
+        const noPvs = runSearch(state, depth, false)
+
+        expect(
+          pvs.score,
+          `${name} d=${depth}: PVS score ${pvs.score} != noPVS score ${noPvs.score}`,
+        ).toBe(noPvs.score)
+        expect(
+          pvs.bestMove,
+          `${name} d=${depth}: PVS best move ${pvs.bestMove} != noPVS best move ${noPvs.bestMove}`,
+        ).toBe(noPvs.bestMove)
+      }
+    }, 120000)
+  }
+
+  it('speed: PVS does not visit more than 150% of noPVS nodes at depth 8 on mid-game fixtures', () => {
+    const midFixtures: Record<string, GameState> = {
+      midGame1: midGameFixture1,
+      midGame2: midGameFixture2,
+    }
+
+    let totalPVS = 0
+    let totalNoPVS = 0
+
+    for (const [name, state] of Object.entries(midFixtures)) {
+      const pvs = runSearchWithLimits(state, 8, true)
+      const noPvs = runSearchWithLimits(state, 8, false)
+
+      totalPVS += pvs.nodeCount
+      totalNoPVS += noPvs.nodeCount
+
+      const ratio = pvs.nodeCount / noPvs.nodeCount
+      const pct = ((1 - ratio) * 100).toFixed(1)
+      console.log(
+        `[PVS SPEED] ${name} d=8: PVS=${pvs.nodeCount} nodes, noPVS=${noPvs.nodeCount} nodes, reduction=${pct}%`,
+      )
+
+      expect(
+        pvs.bestMove,
+        `${name} d=8: PVS best move ${pvs.bestMove} != noPVS best move ${noPvs.bestMove}`,
+      ).toBe(noPvs.bestMove)
+      expect(
+        pvs.score,
+        `${name} d=8: PVS score ${pvs.score} != noPVS score ${noPvs.score}`,
+      ).toBe(noPvs.score)
+    }
+
+    const combinedRatio = totalPVS / totalNoPVS
+    const combinedPct = ((1 - combinedRatio) * 100).toFixed(1)
+    console.log(
+      `[PVS SPEED] Combined: PVS=${totalPVS} nodes, noPVS=${totalNoPVS} nodes, reduction=${combinedPct}%`,
+    )
+
+    expect(
+      combinedRatio,
+      `Combined PVS nodes (${totalPVS}) should be <= 150% of noPVS (${totalNoPVS}), actual ratio=${(combinedRatio * 100).toFixed(1)}%`,
+    ).toBeLessThanOrEqual(1.50)
+  }, 120000)
 })

@@ -132,3 +132,45 @@ describe('self-play: casual vs beginner', () => {
     expect(casualWins).toBeGreaterThanOrEqual(7)
   })
 })
+
+describe('self-play: new-Expert (PVS) vs old-Expert (no PVS)', () => {
+  it('new-Expert beats old-Expert >= 50% over 40 games at 200ms per move', () => {
+    const newExpert: BotPlayer = {
+      pickMove: (s) => {
+        const r = pickMoveExpert(s, RULES, 200, undefined, true)
+        return r.pv[0] ?? -1
+      },
+    }
+
+    const oldExpert: BotPlayer = {
+      pickMove: (s) => {
+        const r = pickMoveExpert(s, RULES, 200, undefined, false)
+        return r.pv[0] ?? -1
+      },
+    }
+
+    let newExpertWins = 0
+    let draws = 0
+    const totalGames = 40
+
+    for (let i = 0; i < totalGames; i++) {
+      const newExpertIsBottom = i < totalGames / 2
+
+      const game = playGame(
+        newExpertIsBottom ? newExpert : oldExpert,
+        newExpertIsBottom ? oldExpert : newExpert,
+      )
+
+      const newExpertSide: Side = newExpertIsBottom ? 'bottom' : 'top'
+      if (game.winner === 'draw') {
+        draws++
+      } else if (game.winner === newExpertSide) {
+        newExpertWins++
+      }
+    }
+
+    const winRate = newExpertWins / totalGames
+    console.log(`[PVS STRENGTH] new vs old: ${newExpertWins}W / ${draws}D / ${totalGames - newExpertWins - draws}L = ${(winRate * 100).toFixed(1)}%`)
+    expect(newExpertWins / totalGames).toBeGreaterThanOrEqual(0.50)
+  }, 600000)
+})

@@ -180,12 +180,16 @@ export class AnalysisWorkerHandler {
       checkInterval: 2048,
     }
 
+    const killers: number[][] = []
+    const historyTable: number[][] = [new Array<number>(14).fill(0), new Array<number>(14).fill(0)]
+
     let bestResult = {
       score: 0,
       pv: [] as number[],
       depth: 0,
       rootScores: {} as Record<number, number>,
     }
+    let prevRootScores: Record<number, number> | undefined
     let depth = 1
 
     const sendBestResult = (): void => {
@@ -302,6 +306,10 @@ export class AnalysisWorkerHandler {
         depth === 1 ? undefined : limits,
         ExtraTurnConfig.MAX_EXTRA_TURN_EXTENSION,
         this.probe ?? undefined,
+        killers,
+        historyTable,
+        true,
+        depth > 1 ? prevRootScores : undefined,
       )
 
       if (cancelSignal.cancelled) {
@@ -315,6 +323,7 @@ export class AnalysisWorkerHandler {
       }
 
       bestResult = { score: result.score, pv: result.pv, depth, rootScores }
+      prevRootScores = rootScores
 
       depth++
       setTimeout(iterate, 0)
