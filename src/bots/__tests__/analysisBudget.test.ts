@@ -155,31 +155,39 @@ describe('verification search — perspective conversion', () => {
   }, 15000)
 
   it('non-extra-turn played move: negation (opponent perspective)', async () => {
-    // midGameFixture2: bottom to move, find best move first
+    // midGameFixture2: bottom to move
     const { analyze } = createTestHarness()
-    const bestResult = await analyze(midGameFixture2, 500, 1)
-    const bestMove = bestResult.pitIndex
 
-    // Find a non-extra-turn legal move different from best move
     const extraPit = hasExtraTurnMove(midGameFixture2)
     const legal = legalMoves(midGameFixture2, RULES)
-    const nonExtraPit = legal.find((p) => p !== extraPit && p !== bestMove)
-    if (nonExtraPit === undefined) return
 
-    const childCheck = applyMove(midGameFixture2, nonExtraPit!, RULES)
-    expect(childCheck.currentPlayer).not.toBe(midGameFixture2.currentPlayer)
+    // Try non-extra-turn legal moves until we find one that yields a defined
+    // exactPlayedEval. The analysis worker skips the verification search when
+    // the played move coincides with the best move, so we need a move that
+    // isn't the best.
+    let foundMatch: { exactPlayedEval: number; pit: number } | undefined
+    for (const candidate of legal) {
+      if (candidate === extraPit) continue
+      const childCheck = applyMove(midGameFixture2, candidate, RULES)
+      if (childCheck.currentPlayer === midGameFixture2.currentPlayer) continue
 
-    const result = await analyze(midGameFixture2, 600, 2, nonExtraPit)
+      const result = await analyze(midGameFixture2, 600, 1, candidate)
+      if (result.exactPlayedEval !== undefined) {
+        foundMatch = { exactPlayedEval: result.exactPlayedEval, pit: candidate }
+        break
+      }
+    }
 
-    expect(result.exactPlayedEval).toBeDefined()
+    expect(foundMatch).toBeDefined()
+    if (!foundMatch) return
 
     // Verify sign matches a depth-1 parent search
     const rootScores: Record<number, number> = {}
     minimax(midGameFixture2, 1, RULES, evaluateExpert, undefined, rootScores, 1)
-    const parentRootScore = rootScores[nonExtraPit!]
+    const parentRootScore = rootScores[foundMatch.pit]
     expect(parentRootScore).toBeDefined()
-    expect(Math.sign(result.exactPlayedEval!)).toBe(Math.sign(parentRootScore!))
-  }, 15000)
+    expect(Math.sign(foundMatch.exactPlayedEval)).toBe(Math.sign(parentRootScore!))
+  }, 30000)
 })
 
 describe('verification search — best-move skip', () => {

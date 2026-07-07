@@ -1,5 +1,5 @@
 export { createInitialState, cloneState } from './state'
-export { legalMoves, applyMove } from './moves'
+export { legalMoves, applyMove, computeMoveDetails } from './moves'
 export { moveToNotation, notationToMove, gameToText, parseGameText } from './notation'
 export { encodeState, decodeState } from './serialization'
 export { KALAH_STANDARD } from './rules'

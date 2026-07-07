@@ -776,9 +776,10 @@ export function pickMoveExpert(
   timeBudgetMs = 3000,
   cancelSignal?: CancelSignal,
   usePVS = true,
+  evalFn: EvaluationFn = evaluateExpert,
 ): IterativeResult {
   const tt = new TranspositionTable()
-  return iterativeDeepening(state, timeBudgetMs, rules, evaluateExpert, tt, cancelSignal, undefined, undefined, undefined, usePVS)
+  return iterativeDeepening(state, timeBudgetMs, rules, evalFn, tt, cancelSignal, undefined, undefined, undefined, usePVS)
 }
 
 // ── Principal Variation Extraction via Re-search ─────────────────────────

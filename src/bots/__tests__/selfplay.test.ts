@@ -1,39 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { createInitialState, applyMove } from '../../engine'
 import { KALAH_STANDARD } from '../../engine'
-import type { GameState, Side } from '../../engine'
+import type { Side } from '../../engine'
 import { pickMoveBeginner, pickMoveCasual, pickMoveStrong, pickMoveExpert } from '../search'
-import type { RandomFn } from '../search'
-
-// LCG-based seeded PRNG
-function createSeededRandom(seed: number): RandomFn {
-  return () => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff
-    return seed / 0x7fffffff
-  }
-}
+import type { BotPlayer } from '../selfplayRunner'
+import { playGame, createSeededRandom } from '../selfplayRunner'
 
 const RULES = KALAH_STANDARD
-
-interface BotPlayer {
-  pickMove: (state: GameState) => number
-}
-
-function playGame(bottomPlayer: BotPlayer, topPlayer: BotPlayer): GameState {
-  let state = createInitialState(RULES, 'bottom')
-  let moveCount = 0
-  const maxMoves = 200
-
-  while (state.status !== 'finished' && moveCount < maxMoves) {
-    const bot = state.currentPlayer === 'bottom' ? bottomPlayer : topPlayer
-    const move = bot.pickMove(state)
-    if (move < 0) break
-    state = applyMove(state, move, RULES)
-    moveCount++
-  }
-
-  return state
-}
 
 describe('self-play: strong vs beginner', () => {
   it('strong beats beginner >90% over 20 games', () => {

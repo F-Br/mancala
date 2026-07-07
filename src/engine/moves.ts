@@ -64,7 +64,7 @@ function determineWinner(board: number[]): 'draw' | Side {
   return 'draw'
 }
 
-function computeMoveDetails(
+export function computeMoveDetails(
   board: number[],
   pitIndex: number,
   currentPlayer: Side,
