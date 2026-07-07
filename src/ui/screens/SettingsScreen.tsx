@@ -122,7 +122,7 @@ export function SettingsScreen() {
                 onChange={(e) =>
                   settings.setAnimationSpeed(Number(e.target.value))
                 }
-                className="w-full accent-accent"
+                className="themed-range w-full"
               />
               <div className="flex justify-between text-xs text-muted">
                 <span>0</span>

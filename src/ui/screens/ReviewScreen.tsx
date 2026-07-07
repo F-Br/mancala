@@ -585,7 +585,7 @@ export function ReviewScreen() {
                 max={maxIndex}
                 value={currentIndex}
                 onChange={handleScrub}
-                className="flex-1 accent-accent h-1 cursor-pointer"
+                className="themed-range flex-1 cursor-pointer"
               />
               <span className="text-xs text-muted w-14 text-right font-mono shrink-0">
                 {Math.min(currentIndex + 1, maxIndex)} / {maxIndex}
