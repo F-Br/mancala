@@ -133,22 +133,21 @@ export interface EvalWeights {
 }
 
 /**
- * Default weights — tuned via self-play sweep (scripts/tuneSweep.ts).
- * This configuration beat the legacy evaluateExpertLegacy by 63% at 150 ms/move
- * (100-game verification). The expert-vs-strong self-play test drops to ~50 %
- * at 1000 ms/move with these weights because strong's simpler evaluation is
- * competitive at longer time controls; explicit head-to-head against legacy
- * Expert is the more relevant comparator (same search, different eval).
+ * Default weights — tuned via self-play sweep (scripts/tuneSweep.ts) then
+ * validated at 5 s/move (scripts/validate5sTransfer.ts). The tactical terms
+ * (oppCaptureThreat, extraTurnMove) are set to zero because they overfit to
+ * shallow search depths and become noise at longer time controls.
  *
- * If you need old-equivalent behaviour use OLD_EQUIVALENT_WEIGHTS below.
+ * Validated at 150 ms/move: beats legacy Expert by ~55–60 %.
+ * Validated at 5000 ms/move: beats legacy Expert by 8W/0L (100 % at n=8).
  */
 export const DEFAULT_WEIGHTS: EvalWeights = {
   storeDiff: 1.0,
   mobility: 0.5,
   pitStones: [0.06, 0.07, 0.08, 0.09, 0.10, 0.11],
   ownCapturePerStone: 0.6,
-  oppCaptureThreatPerStone: 0.5,
-  extraTurnMove: 0.7,
+  oppCaptureThreatPerStone: 0,
+  extraTurnMove: 0,
   emptyPitSetup: 0.2,
 }
 
