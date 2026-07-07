@@ -119,8 +119,8 @@ export function StatsScreen() {
           {/* KPI row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             <KpiCard label={strings.stats.totalGames} value={stats.total} />
-            <KpiCard label={strings.stats.wins} value={stats.wins} accent />
-            <KpiCard label={strings.stats.losses} value={stats.losses} />
+            <KpiCard label={strings.stats.wins} value={stats.wins} tone="win" />
+            <KpiCard label={strings.stats.losses} value={stats.losses} tone="loss" />
             <KpiCard label={strings.stats.draws} value={stats.draws} />
           </div>
 
@@ -148,7 +148,7 @@ export function StatsScreen() {
                           <div
                             className="h-full rounded-full transition-all"
                             style={{
-                              width: `${Math.max(pct, 2)}%`,
+                              width: count === 0 ? '0%' : `${Math.max(pct, 2)}%`,
                               backgroundColor: `var(--theme-${key})`,
                             }}
                           />
@@ -202,7 +202,7 @@ export function StatsScreen() {
                         <div className="flex gap-0.5 h-2 rounded-full overflow-hidden bg-surface-2">
                           {s.wins > 0 && (
                             <div
-                              className="h-full bg-accent transition-all"
+                              className="h-full bg-win transition-all"
                               style={{ width: `${winPct}%` }}
                             />
                           )}
@@ -211,7 +211,7 @@ export function StatsScreen() {
                               className="h-full transition-all"
                               style={{
                                 width: `${drawPct}%`,
-                                backgroundColor: 'var(--theme-inaccuracy)',
+                                backgroundColor: 'var(--theme-draw)',
                               }}
                             />
                           )}
@@ -220,13 +220,13 @@ export function StatsScreen() {
                               className="h-full transition-all"
                               style={{
                                 width: `${lossPct}%`,
-                                backgroundColor: 'var(--theme-mistake)',
+                                backgroundColor: 'var(--theme-loss)',
                               }}
                             />
                           )}
                         </div>
                         <div className="flex justify-between text-xs text-muted mt-0.5">
-                          <span className="text-accent">
+                          <span className="text-win">
                             {winPct.toFixed(0)}% {strings.stats.winRate.toLowerCase()}
                           </span>
                           <span>
@@ -275,33 +275,26 @@ export function StatsScreen() {
 function KpiCard({
   label,
   value,
-  accent: isAccent,
+  tone,
 }: {
   label: string
   value: number
-  accent?: boolean
+  tone?: 'win' | 'loss'
 }) {
+  const numeralColor =
+    tone === 'win' ? 'text-win' : tone === 'loss' ? 'text-loss' : 'text-text'
+
   return (
-    <div
-      className="rounded-card border border-border p-4 md:p-5 flex flex-col items-center gap-1"
-      style={{
-        background:
-          'linear-gradient(180deg, color-mix(in srgb, var(--theme-surface) 94%, white) 0%, var(--theme-surface) 100%)',
-        boxShadow:
-          'var(--theme-shadow-card), inset 0 1px 0 0 var(--theme-highlight)',
-      }}
-    >
-      <span
-        className={`font-display text-display-xl font-semibold ${
-          isAccent ? 'text-accent' : 'text-text'
-        }`}
-      >
-        {value}
-      </span>
-      <span className="text-label font-semibold uppercase tracking-label text-muted">
-        {label}
-      </span>
-    </div>
+    <Card>
+      <div className="flex flex-col items-center gap-1">
+        <span className={`font-display text-display-xl font-semibold ${numeralColor}`}>
+          {value}
+        </span>
+        <span className="text-label font-semibold uppercase tracking-label text-muted">
+          {label}
+        </span>
+      </div>
+    </Card>
   )
 }
 
