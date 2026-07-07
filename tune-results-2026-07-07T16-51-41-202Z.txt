@@ -1,0 +1,200 @@
+Tuning sweep — 40 games/config, 150ms/move
+Started at 2026-07-07T16:51:41.208Z
+Log: tune-results-2026-07-07T16-51-41-202Z.txt
+JSONL: tune-results-2026-07-07T16-51-41-202Z.jsonl
+
+
+======================================================================
+Phase: P1-ownCapturePerStone (6 configs, 40 games each)
+======================================================================
+
+[P1-ownCapturePerStone] Testing "ownCapture=0.3" with 40 games...
+  Done in 209.9s — 19W/1D/20L (48.8%)
+
+[P1-ownCapturePerStone] Testing "ownCapture=0.5" with 40 games...
+  Done in 204.0s — 20W/0D/20L (50.0%)
+
+[P1-ownCapturePerStone] Testing "ownCapture=0.6" with 40 games...
+  Done in 211.3s — 20W/1D/19L (51.2%)
+
+[P1-ownCapturePerStone] Testing "ownCapture=0.8" with 40 games...
+  Done in 208.6s — 20W/0D/20L (50.0%)
+
+[P1-ownCapturePerStone] Testing "ownCapture=1" with 40 games...
+  Done in 201.8s — 19W/0D/21L (47.5%)
+
+[P1-ownCapturePerStone] Testing "ownCapture=1.5" with 40 games...
+  Done in 193.6s — 15W/0D/25L (37.5%)
+
+--- P1-ownCapturePerStone Summary ---
+  ownCapture=0.6: 51.2% score (20W/1D/19L)
+  ownCapture=0.5: 50.0% score (20W/0D/20L)
+  ownCapture=0.8: 50.0% score (20W/0D/20L)
+  ownCapture=0.3: 48.8% score (19W/1D/20L)
+  ownCapture=1: 47.5% score (19W/0D/21L)
+  ownCapture=1.5: 37.5% score (15W/0D/25L)
+
+======================================================================
+Phase: P2-extraTurnMove (5 configs, 40 games each)
+======================================================================
+
+[P2-extraTurnMove] Testing "extraTurn=0 (cap=0.6)" with 40 games...
+  Done in 206.2s — 21W/0D/19L (52.5%)
+
+[P2-extraTurnMove] Testing "extraTurn=0.3 (cap=0.6)" with 40 games...
+  Done in 184.6s — 5W/0D/35L (12.5%)
+
+[P2-extraTurnMove] Testing "extraTurn=0.5 (cap=0.6)" with 40 games...
+  Done in 187.4s — 11W/0D/29L (27.5%)
+
+[P2-extraTurnMove] Testing "extraTurn=0.7 (cap=0.6)" with 40 games...
+  Done in 192.2s — 22W/2D/16L (57.5%)
+
+[P2-extraTurnMove] Testing "extraTurn=1 (cap=0.6)" with 40 games...
+  Done in 190.8s — 19W/0D/21L (47.5%)
+
+--- P2-extraTurnMove Summary ---
+  extraTurn=0.7 (cap=0.6): 57.5% score (22W/2D/16L)
+  extraTurn=0 (cap=0.6): 52.5% score (21W/0D/19L)
+  extraTurn=1 (cap=0.6): 47.5% score (19W/0D/21L)
+  extraTurn=0.5 (cap=0.6): 27.5% score (11W/0D/29L)
+  extraTurn=0.3 (cap=0.6): 12.5% score (5W/0D/35L)
+
+======================================================================
+Phase: P3-oppCaptureThreat (4 configs, 40 games each)
+======================================================================
+
+[P3-oppCaptureThreat] Testing "oppThreat=0.1 (cap=0.6, et=0.7)" with 40 games...
+  Done in 188.2s — 4W/0D/36L (10.0%)
+
+[P3-oppCaptureThreat] Testing "oppThreat=0.2 (cap=0.6, et=0.7)" with 40 games...
+  Done in 188.1s — 7W/0D/33L (17.5%)
+
+[P3-oppCaptureThreat] Testing "oppThreat=0.3 (cap=0.6, et=0.7)" with 40 games...
+  Done in 214.6s — 20W/0D/20L (50.0%)
+
+[P3-oppCaptureThreat] Testing "oppThreat=0.5 (cap=0.6, et=0.7)" with 40 games...
+  Done in 210.8s — 21W/0D/19L (52.5%)
+
+--- P3-oppCaptureThreat Summary ---
+  oppThreat=0.5 (cap=0.6, et=0.7): 52.5% score (21W/0D/19L)
+  oppThreat=0.3 (cap=0.6, et=0.7): 50.0% score (20W/0D/20L)
+  oppThreat=0.2 (cap=0.6, et=0.7): 17.5% score (7W/0D/33L)
+  oppThreat=0.1 (cap=0.6, et=0.7): 10.0% score (4W/0D/36L)
+
+======================================================================
+Phase: P4-pitStones (4 configs, 40 games each)
+======================================================================
+
+[P4-pitStones] Testing "pits=flat-low(0.06) (cap=0.6, et=0.7, opp=0.5)" with 40 games...
+  Done in 221.1s — 5W/0D/35L (12.5%)
+
+[P4-pitStones] Testing "pits=spec-grad(0.06→0.11) (cap=0.6, et=0.7, opp=0.5)" with 40 games...
+  Done in 209.5s — 22W/0D/18L (55.0%)
+
+[P4-pitStones] Testing "pits=steep-grad(0.04→0.14) (cap=0.6, et=0.7, opp=0.5)" with 40 games...
+  Done in 213.6s — 16W/2D/22L (42.5%)
+
+[P4-pitStones] Testing "pits=steep-grad(0.03→0.15) (cap=0.6, et=0.7, opp=0.5)" with 40 games...
+  Done in 211.8s — 7W/15D/18L (36.3%)
+
+--- P4-pitStones Summary ---
+  pits=spec-grad(0.06→0.11) (cap=0.6, et=0.7, opp=0.5): 55.0% score (22W/0D/18L)
+  pits=steep-grad(0.04→0.14) (cap=0.6, et=0.7, opp=0.5): 42.5% score (16W/2D/22L)
+  pits=steep-grad(0.03→0.15) (cap=0.6, et=0.7, opp=0.5): 36.3% score (7W/15D/18L)
+  pits=flat-low(0.06) (cap=0.6, et=0.7, opp=0.5): 12.5% score (5W/0D/35L)
+
+======================================================================
+Phase: P5-mobility (5 configs, 40 games each)
+======================================================================
+
+[P5-mobility] Testing "mobility=0.1" with 40 games...
+  Done in 207.2s — 20W/0D/20L (50.0%)
+
+[P5-mobility] Testing "mobility=0.2" with 40 games...
+  Done in 212.0s — 10W/0D/30L (25.0%)
+
+[P5-mobility] Testing "mobility=0.3" with 40 games...
+  Done in 214.3s — 15W/0D/25L (37.5%)
+
+[P5-mobility] Testing "mobility=0.4" with 40 games...
+  Done in 170.9s — 1W/0D/39L (2.5%)
+
+[P5-mobility] Testing "mobility=0.5" with 40 games...
+  Done in 162.1s — 21W/0D/19L (52.5%)
+
+--- P5-mobility Summary ---
+  mobility=0.5: 52.5% score (21W/0D/19L)
+  mobility=0.1: 50.0% score (20W/0D/20L)
+  mobility=0.3: 37.5% score (15W/0D/25L)
+  mobility=0.2: 25.0% score (10W/0D/30L)
+  mobility=0.4: 2.5% score (1W/0D/39L)
+
+======================================================================
+Phase: P6-final-verification — best config at 100 games
+======================================================================
+
+Best weights so far: {
+  "storeDiff": 1,
+  "mobility": 0.5,
+  "pitStones": [
+    0.06,
+    0.07,
+    0.08,
+    0.09,
+    0.1,
+    0.11
+  ],
+  "ownCapturePerStone": 0.6,
+  "oppCaptureThreatPerStone": 0.5,
+  "extraTurnMove": 0.7,
+  "emptyPitSetup": 0.2
+}
+
+
+======================================================================
+GRAND SUMMARY
+======================================================================
+
+Rank | Score% | Win%  | W/D/L          | Name
+-----|--------|-------|----------------|------
+  1  |  63.0% | 63.0% | 63/0/37 | FINAL-BEST
+  2  |  57.5% | 55.0% | 22/2/16 | extraTurn=0.7 (cap=0.6)
+  3  |  55.0% | 55.0% | 22/0/18 | pits=spec-grad(0.06→0.11) (cap=0.6, et=0.7, opp=0.5)
+  4  |  52.5% | 52.5% | 21/0/19 | extraTurn=0 (cap=0.6)
+  5  |  52.5% | 52.5% | 21/0/19 | oppThreat=0.5 (cap=0.6, et=0.7)
+  6  |  52.5% | 52.5% | 21/0/19 | mobility=0.5
+  7  |  51.2% | 50.0% | 20/1/19 | ownCapture=0.6
+  8  |  50.0% | 50.0% | 20/0/20 | ownCapture=0.5
+  9  |  50.0% | 50.0% | 20/0/20 | ownCapture=0.8
+ 10  |  50.0% | 50.0% | 20/0/20 | oppThreat=0.3 (cap=0.6, et=0.7)
+ 11  |  50.0% | 50.0% | 20/0/20 | mobility=0.1
+ 12  |  48.8% | 47.5% | 19/1/20 | ownCapture=0.3
+ 13  |  47.5% | 47.5% | 19/0/21 | ownCapture=1
+ 14  |  47.5% | 47.5% | 19/0/21 | extraTurn=1 (cap=0.6)
+ 15  |  42.5% | 40.0% | 16/2/22 | pits=steep-grad(0.04→0.14) (cap=0.6, et=0.7, opp=0.5)
+ 16  |  37.5% | 37.5% | 15/0/25 | ownCapture=1.5
+ 17  |  37.5% | 37.5% | 15/0/25 | mobility=0.3
+ 18  |  36.3% | 17.5% |  7/15/18 | pits=steep-grad(0.03→0.15) (cap=0.6, et=0.7, opp=0.5)
+ 19  |  27.5% | 27.5% | 11/0/29 | extraTurn=0.5 (cap=0.6)
+ 20  |  25.0% | 25.0% | 10/0/30 | mobility=0.2
+
+Final best config: {
+  "storeDiff": 1,
+  "mobility": 0.5,
+  "pitStones": [
+    0.06,
+    0.07,
+    0.08,
+    0.09,
+    0.1,
+    0.11
+  ],
+  "ownCapturePerStone": 0.6,
+  "oppCaptureThreatPerStone": 0.5,
+  "extraTurnMove": 0.7,
+  "emptyPitSetup": 0.2
+}
+
+Full results in tune-results-2026-07-07T16-51-41-202Z.jsonl and tune-results-2026-07-07T16-51-41-202Z.txt
+Finished at 2026-07-07T18:18:25.356Z

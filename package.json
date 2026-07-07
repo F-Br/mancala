@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:slow": "vitest run --config vitest.slow.config.ts",
     "test:watch": "vitest",
-    "tune": "tsx scripts/tuneEval.ts"
+    "tune": "tsx scripts/tuneEval.ts",
+    "sweep": "tsx scripts/tuneSweep.ts"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
