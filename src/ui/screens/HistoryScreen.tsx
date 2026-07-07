@@ -73,13 +73,6 @@ function GameCard({ record, onReview, onDelete }: GameCardProps) {
     ? buildGraphPoints(record.analysisResult)
     : null
 
-  const resultChipClass =
-    record.result === 'win'
-      ? 'bg-best/15 text-best'
-      : record.result === 'loss'
-        ? 'bg-blunder/15 text-blunder'
-        : 'bg-surface-2 text-muted'
-
   const resultLabel =
     record.result === 'win'
       ? strings.history.win
@@ -109,7 +102,23 @@ function GameCard({ record, onReview, onDelete }: GameCardProps) {
         <div className="flex flex-col gap-3">
           {/* Header row: result Chip + delete */}
           <div className="flex items-center justify-between">
-            <Chip className={`font-bold ${resultChipClass}`}>
+            <Chip
+              className="font-bold"
+              bg={
+                record.result === 'win'
+                  ? 'bg-win'
+                  : record.result === 'loss'
+                    ? 'bg-loss'
+                    : 'bg-draw'
+              }
+              text={
+                record.result === 'win'
+                  ? 'text-bg'
+                  : record.result === 'loss'
+                    ? 'text-stone'
+                    : 'text-bg'
+              }
+            >
               {resultLabel}
             </Chip>
             <button
@@ -290,7 +299,11 @@ export function HistoryScreen() {
           <span className="text-label text-muted uppercase tracking-label">
             {strings.history.streak}
           </span>
-          <span className="text-display-md font-display font-semibold text-text">
+          <span className={`text-display-md font-display font-semibold ${
+            streak.count > 0
+              ? streak.type === 'win' ? 'text-win' : 'text-loss'
+              : 'text-text'
+          }`}>
             {streak.count > 0
               ? `${streak.count}${streak.type === 'win' ? strings.history.win : strings.history.loss}`
               : '\u2014'}
@@ -417,7 +430,13 @@ export function HistoryScreen() {
       {/* ── Single-delete confirm modal ─────────────────────────── */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-          <div className="bg-board rounded-2xl p-6 max-w-sm w-full flex flex-col items-center gap-4 shadow-2xl">
+          <div
+            className="rounded-md border border-border p-6 max-w-sm w-full flex flex-col items-center gap-4"
+            style={{
+              background: `linear-gradient(180deg, color-mix(in srgb, var(--theme-surface) 94%, white) 0%, var(--theme-surface) 100%)`,
+              boxShadow: `var(--theme-shadow-card), inset 0 1px 0 0 var(--theme-highlight)`,
+            }}
+          >
             <p className="text-sm text-text text-center">
               {strings.history.deleteConfirm}
             </p>
