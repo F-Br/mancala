@@ -366,7 +366,7 @@ function BoardInner({
           onClick={() => enabled && onPitClick(pitIndex)}
           disabled={!enabled}
           aria-label={pitAriaLabel(pitIndex)}
-          className={`relative w-11 h-11 md:w-14 md:h-14 well-pit ${ringClass}`}
+          className={`relative w-full max-w-14 aspect-square justify-self-center well-pit ${ringClass}`}
           style={ringStyle}
         >
           <StoneCluster
@@ -396,7 +396,7 @@ function BoardInner({
       data-el={storeIndex}
       className={
         'relative well-store ' +
-        'h-[72px] w-full md:h-32 md:w-[60px] ' +
+        'w-9 md:w-[60px] self-stretch shrink-0 ' +
         (accent ? 'border-2 border-accent' : '')
       }
     >
@@ -420,15 +420,18 @@ function BoardInner({
       ref={boardRef}
       className={`relative w-full max-w-xl mx-auto ${className}`}
     >
-      <div className="board-slab flex items-center justify-center p-3 md:p-4">
-        <div className="flex flex-col md:flex-row items-center gap-2 md:gap-3 w-full">
+      {/* At 360px viewport: 16px page padding ×2 + 10px slab padding ×2 = 52px;
+          interior ~308px; two 36px stores + two 6px store-gaps = 84px;
+          remaining ~224px for grid; six fluid pits with five 4px gaps ≈ 34px pit on narrowest phones. */}
+      <div className="board-slab flex items-center justify-center p-2.5 sm:p-3 md:p-4">
+        <div className="flex flex-row items-stretch gap-1.5 md:gap-3 w-full">
           {renderStore(leftStore, animPhase !== 'idle' && leftStore === ownStore)}
 
-          <div className="flex flex-col gap-2 md:gap-3 flex-1 w-full">
-            <div className="flex gap-1.5 md:gap-2 justify-center">
+          <div className="flex flex-col gap-2 md:gap-3 flex-1 min-w-0">
+            <div className="grid grid-cols-6 gap-1 sm:gap-1.5 md:gap-2">
               {topRowPits.map(renderPit)}
             </div>
-            <div className="flex gap-1.5 md:gap-2 justify-center">
+            <div className="grid grid-cols-6 gap-1 sm:gap-1.5 md:gap-2">
               {bottomRowPits.map(renderPit)}
             </div>
           </div>
