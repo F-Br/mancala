@@ -593,22 +593,23 @@ export function GameScreen() {
         {/* LEFT panel — player score */}
         <Card
           className={
-            'flex flex-col items-center text-center p-0 ' +
             (displayCurrentPlayer === 'bottom' ? 'border-accent' : '')
           }
         >
-          <span className="text-label uppercase tracking-label text-muted font-semibold">
-            {bottomLabel}
-          </span>
-          <span className="font-display text-display-xl font-bold text-text leading-none mt-1">
-            {gameState.board[6]}
-          </span>
-          {displayCurrentPlayer === 'bottom' && (
-            <span className="flex items-center gap-1.5 text-accent text-sm mt-3">
-              <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
-              to move
+          <div className="flex flex-col items-center text-center">
+            <span className="text-label uppercase tracking-label text-muted font-semibold">
+              {bottomLabel}
             </span>
-          )}
+            <span className="font-display text-display-xl font-bold text-text leading-none mt-1 block">
+              {gameState.board[6]}
+            </span>
+            {displayCurrentPlayer === 'bottom' && (
+              <span className="flex items-center gap-1.5 text-accent text-sm mt-3">
+                <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
+                to move
+              </span>
+            )}
+          </div>
         </Card>
 
         {/* CENTER — board + turn indicator */}

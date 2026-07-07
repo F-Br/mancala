@@ -16,8 +16,9 @@ function resultColor(winner: 'bottom' | 'top' | 'draw' | null, bottomLabel: stri
   if (winner === 'draw') return 'text-muted'
   const youWin = (winner === 'bottom' && bottomLabel === strings.game.you) ||
     (winner === 'top' && bottomLabel !== strings.game.you)
-  if (youWin) return 'text-accent'
-  return 'text-blunder'
+  if (youWin) return 'text-win'
+  // #C0392B at display size passes WCAG's large-text 3:1 threshold on the dark surfaces, so no lighter variant is needed
+  return 'text-loss'
 }
 
 export function GameEndOverlay({

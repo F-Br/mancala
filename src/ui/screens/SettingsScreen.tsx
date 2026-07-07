@@ -38,7 +38,7 @@ export function SettingsScreen() {
                       type="button"
                       onClick={() => setTheme(key)}
                       className={
-                        'flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg text-sm font-medium border-2 transition-all ' +
+                        'flex items-center gap-2.5 px-3.5 py-2.5 rounded-chip text-sm font-medium border-2 transition-all ' +
                         (selected
                           ? 'bg-accent text-bg border-accent shadow-md'
                           : 'bg-surface-2 text-text border-border hover:border-accent/50')
@@ -147,7 +147,7 @@ export function SettingsScreen() {
             <button
               type="button"
               onClick={settings.resetAll}
-              className="w-full py-2 rounded-chip text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-900/20 transition-colors"
+              className="w-full py-2 rounded-chip text-sm font-medium text-loss hover:brightness-110 hover:bg-loss/10 transition-colors"
             >
               {strings.settings.resetAll}
             </button>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Button } from './Button'
 
 const DISMISSED_KEY = 'mancala-install-dismissed'
 
@@ -59,20 +60,12 @@ export function InstallPrompt({ visible }: { visible: boolean }) {
               Install Mancala for offline play and quick access
             </p>
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleInstall}
-                className="flex-1 py-2 rounded-xl bg-accent text-bg font-semibold text-sm hover:brightness-110"
-              >
+              <Button variant="primary" size="sm" className="flex-1" onClick={handleInstall}>
                 Install Mancala
-              </button>
-              <button
-                type="button"
-                onClick={handleDismiss}
-                className="py-2 px-3 rounded-xl text-muted hover:text-text text-sm"
-              >
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleDismiss}>
                 Dismiss
-              </button>
+              </Button>
             </div>
           </div>
         </motion.div>
