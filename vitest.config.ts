@@ -5,7 +5,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
-    // TODO: re-enable — flaky; resource-contention timeout and probabilistic assertion
+    // Slow engine suites (minutes, not flaky) — run via npm run test:slow
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
