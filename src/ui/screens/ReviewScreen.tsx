@@ -472,12 +472,15 @@ export function ReviewScreen() {
           <p className="text-muted text-sm">
             {tbPhase ? strings.review.preparingEndgameTables : strings.review.analyzing}
           </p>
-          <div className="w-48 h-2 bg-board/40 rounded-full overflow-hidden">
+          <div className="w-48 h-2 bg-surface-2 rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-accent rounded-full"
+              className={
+                'h-full bg-accent rounded-full' +
+                (progress.total > 0 && (progress.current / progress.total) * 100 < 100 ? ' animate-pulse' : '')
+              }
               initial={{ width: 0 }}
               animate={{
-                width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%`,
+                width: `${progress.total > 0 ? Math.max((progress.current / progress.total) * 100, 3) : 0}%`,
               }}
               transition={{ duration: 0.2 }}
             />
@@ -679,7 +682,7 @@ export function ReviewScreen() {
                         'inline-flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer transition-colors ' +
                         (i === pvStep
                           ? 'bg-accent/20 text-accent ring-1 ring-accent/50'
-                          : 'text-muted hover:bg-board/40')
+                          : 'text-muted hover:bg-surface-2')
                       }
                     >
                       <span className="text-[10px] opacity-70">

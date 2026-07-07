@@ -125,11 +125,12 @@ function StoneCluster({
         </div>
       )}
 
+      {/* on light theme, stone color over brightest pit gradient = 4.82:1; dark shadow required for edge definition, not decorative */}
       {showPitCounts && !overflow && (
         <span
           className={
             'absolute bottom-1 right-1.5 z-10 pointer-events-none ' +
-            'font-body text-label font-semibold text-muted'
+            'font-body text-label font-semibold text-stone drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]'
           }
         >
           {count}
