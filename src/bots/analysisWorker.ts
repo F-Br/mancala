@@ -125,6 +125,8 @@ export class AnalysisWorkerHandler {
   private tbBestMove: ((state: GameState) => number | undefined) | null = null
   private tbReady = false
   private tbInitStarted = false
+  private queue: AnalysisRequest[] = []
+  private runningRequestId: number | null = null
 
   constructor(
     postMsg: (msg: AnalysisWorkerMessage | TbProgressMsg) => void,
@@ -140,15 +142,20 @@ export class AnalysisWorkerHandler {
 
   handleMessage(msg: AnalysisMessage): void {
     if (msg.type === 'cancel') {
-      if (this.currentCancel) {
+      if (msg.requestId === this.runningRequestId && this.currentCancel) {
         this.currentCancel.cancelled = true
+      } else {
+        this.queue = this.queue.filter(r => r.requestId !== msg.requestId)
       }
       return
     }
 
     if (msg.type === 'analyze') {
       this.ensureTablebaseInit()
-      this.handleAnalyze(msg)
+      this.queue.push(msg)
+      if (this.runningRequestId === null) {
+        this.dequeueAndStart()
+      }
     }
   }
 
@@ -225,12 +232,9 @@ export class AnalysisWorkerHandler {
   }
 
   private handleAnalyze(msg: AnalysisRequest): void {
-    if (this.currentCancel) {
-      this.currentCancel.cancelled = true
-    }
-
     const cancelSignal: CancelSignal = { cancelled: false }
     this.currentCancel = cancelSignal
+    this.runningRequestId = msg.requestId
 
     const {
       state,
@@ -260,6 +264,18 @@ export class AnalysisWorkerHandler {
         message: err instanceof Error ? err.message : String(err),
       })
       this.currentCancel = null
+      this.runningRequestId = null
+      if (this.queue.length > 0) {
+        setTimeout(() => this.dequeueAndStart(), 0)
+      }
+    }
+  }
+
+  private dequeueAndStart(): void {
+    if (this.queue.length === 0 || this.runningRequestId !== null) return
+    const next = this.queue.shift()
+    if (next) {
+      this.handleAnalyze(next)
     }
   }
 
@@ -368,9 +384,14 @@ export class AnalysisWorkerHandler {
         rootScores: bestResult.rootScores,
         reachedTerminal,
         ...(exactPlayedEval !== undefined ? { exactPlayedEval } : {}),
+        ...(cancelSignal.cancelled ? { cancelled: true } : {}),
       })
       if (this.currentCancel === cancelSignal) {
         this.currentCancel = null
+      }
+      this.runningRequestId = null
+      if (this.queue.length > 0) {
+        setTimeout(() => this.dequeueAndStart(), 0)
       }
     }
 

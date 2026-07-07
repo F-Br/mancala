@@ -54,15 +54,19 @@ function getWorker(): Worker {
         const entry = pending.get(msg.requestId)
         if (entry) {
           pending.delete(msg.requestId)
-          entry.resolve({
-            pitIndex: msg.pitIndex,
-            evalScore: msg.evalScore,
-            principalVariation: msg.principalVariation,
-            depthReached: msg.depthReached,
-            rootScores: msg.rootScores ?? {},
-            reachedTerminal: msg.reachedTerminal ?? false,
-            ...(msg.exactPlayedEval !== undefined ? { exactPlayedEval: msg.exactPlayedEval } : {}),
-          })
+          if (msg.cancelled) {
+            entry.reject(new Error('Analysis cancelled by worker'))
+          } else {
+            entry.resolve({
+              pitIndex: msg.pitIndex,
+              evalScore: msg.evalScore,
+              principalVariation: msg.principalVariation,
+              depthReached: msg.depthReached,
+              rootScores: msg.rootScores ?? {},
+              reachedTerminal: msg.reachedTerminal ?? false,
+              ...(msg.exactPlayedEval !== undefined ? { exactPlayedEval: msg.exactPlayedEval } : {}),
+            })
+          }
         }
       } else if (msg.type === 'error') {
         const entry = pending.get(msg.requestId)

@@ -60,12 +60,14 @@ export interface AnalysisResponse {
   rootScores: Record<number, number>
   reachedTerminal: boolean
   exactPlayedEval?: number
+  cancelled?: boolean
 }
 
 export interface AnalysisError {
   type: 'error'
   requestId: number
   message: string
+  cancelled?: boolean
 }
 
 export type AnalysisMessage = AnalysisRequest | AnalysisCancelRequest
