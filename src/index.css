@@ -36,6 +36,9 @@
   --color-inaccuracy: var(--theme-inaccuracy);
   --color-mistake: var(--theme-mistake);
   --color-blunder: var(--theme-blunder);
+  --color-win: var(--theme-win);
+  --color-loss: var(--theme-loss);
+  --color-draw: var(--theme-draw);
 
   /* ── Typography ───────────────────────────────────────────────── */
   --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;

@@ -27,6 +27,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--theme-inaccuracy', theme.classifications.inaccuracy)
     root.style.setProperty('--theme-mistake', theme.classifications.mistake)
     root.style.setProperty('--theme-blunder', theme.classifications.blunder)
+    root.style.setProperty('--theme-win', theme.win)
+    root.style.setProperty('--theme-loss', theme.loss)
+    root.style.setProperty('--theme-draw', theme.draw)
 
     if (!appliedRef.current) {
       root.style.setProperty('background-color', 'var(--theme-bg)')

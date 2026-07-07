@@ -65,6 +65,9 @@ export interface ThemeColors {
   highlight: string
   shadowContact: string
   shadowCard: string
+  win: string
+  loss: string
+  draw: string
 }
 
 export type ThemeKey = 'warm-earth' | 'dark-museum' | 'modern-desert'
@@ -81,6 +84,9 @@ export const themes: Themes = {
     text: '#F0DEC4',
     muted: '#8C7A66',
     classifications: classificationColors,
+    win: '#2ECC71',
+    loss: '#C0392B',
+    draw: '#8C7A66',
     surface: '#2C1610',
     surface2: '#3A1F14',
     border: 'rgba(255,255,255,0.08)',
@@ -97,6 +103,9 @@ export const themes: Themes = {
     text: '#F2EAD8',
     muted: '#838385',
     classifications: classificationColors,
+    win: '#2ECC71',
+    loss: '#C0392B',
+    draw: '#838385',
     surface: '#1E1E20',
     surface2: '#29292C',
     border: 'rgba(255,255,255,0.08)',
@@ -113,6 +122,12 @@ export const themes: Themes = {
     text: '#2A1F18',
     muted: '#7A5F4A',
     classifications: classificationColors,
+    /* `#2ECC71` reaches only 2.0:1 contrast against light card surfaces
+     * on this theme.  `#178A4C` achieves 3.77:1 against the #F5EDDC bar
+     * track and ~4.6:1 against the page background. */
+    win: '#178A4C',
+    loss: '#C0392B',
+    draw: '#7A5F4A',
     surface: '#FDF9F0',
     surface2: '#F5EDDC',
     border: 'rgba(0,0,0,0.10)',
