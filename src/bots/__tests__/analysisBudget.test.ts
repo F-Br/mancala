@@ -42,7 +42,7 @@ function createTestHarness(maxTTEntries?: number) {
   ): Promise<AnalysisResponse> {
     return new Promise((resolve, reject) => {
       pending.set(requestId, { resolve, reject })
-      handler.handleMessage({ type: 'analyze', state, timeBudgetMs, requestId, playedPitIndex })
+      handler.handleMessage({ type: 'analyze', state, timeBudgetMs, requestId, ...(playedPitIndex !== undefined ? { playedPitIndex } : {}) })
     })
   }
 
@@ -148,10 +148,10 @@ describe('verification search — perspective conversion', () => {
 
     // Verify sign matches a depth-1 parent search (no AB for exact scores)
     const rootScores: Record<number, number> = {}
-    const parentSearch = minimax(midGameFixture1, 1, RULES, evaluateExpert, undefined, rootScores, 1)
+    minimax(midGameFixture1, 1, RULES, evaluateExpert, undefined, rootScores, 1)
     const parentRootScore = rootScores[extraPit]
     expect(parentRootScore).toBeDefined()
-    expect(Math.sign(result.exactPlayedEval!)).toBe(Math.sign(parentRootScore))
+    expect(Math.sign(result.exactPlayedEval!)).toBe(Math.sign(parentRootScore!))
   }, 15000)
 
   it('non-extra-turn played move: negation (opponent perspective)', async () => {
@@ -178,7 +178,7 @@ describe('verification search — perspective conversion', () => {
     minimax(midGameFixture2, 1, RULES, evaluateExpert, undefined, rootScores, 1)
     const parentRootScore = rootScores[nonExtraPit!]
     expect(parentRootScore).toBeDefined()
-    expect(Math.sign(result.exactPlayedEval!)).toBe(Math.sign(parentRootScore))
+    expect(Math.sign(result.exactPlayedEval!)).toBe(Math.sign(parentRootScore!))
   }, 15000)
 })
 

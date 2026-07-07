@@ -9,7 +9,6 @@ import {
   getOffsets,
   getTotalSize,
   encodeProven,
-  countPitStones,
   extractPits,
 } from '../engine'
 import {
@@ -112,6 +111,7 @@ function saveToIDB(table: Int8Array): Promise<void> {
       })
       .catch(() => {}),
     3000,
+    undefined,
   )
 }
 
@@ -310,7 +310,6 @@ export class AnalysisWorkerHandler {
       }
 
       if (!cancelSignal.cancelled && bestResult.pv.length > 0) {
-        const extractionMs = Math.max(1, Math.floor(timeBudgetMs - (performance.now() - startTime)))
         const effTotalExtrBudget =
           totalExtractionBudgetMs ?? Math.min(2500, Math.max(500, Math.floor(timeBudgetMs * 0.83)))
         const effPerStepExtrBudget =
@@ -368,7 +367,7 @@ export class AnalysisWorkerHandler {
         requestId,
         rootScores: bestResult.rootScores,
         reachedTerminal,
-        exactPlayedEval,
+        ...(exactPlayedEval !== undefined ? { exactPlayedEval } : {}),
       })
       if (this.currentCancel === cancelSignal) {
         this.currentCancel = null

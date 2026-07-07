@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { AnalysisWorkerHandler } from '../../bots/analysisWorker'
-import { createInitialState, cloneState, legalMoves, applyMove } from '../../engine'
+import { cloneState, legalMoves, applyMove } from '../../engine'
 import { KALAH_STANDARD } from '../../engine'
 import type { GameState } from '../../engine'
 import type { AnalysisResponse } from '../../bots/types'
 import type { AnalysisResult } from '../../bots/analysisClient'
 import type { TbProgressMsg } from '../../engine'
 import { executeBatchAnalysis, replayPositions } from '../batchAnalysis'
-import type { BatchAnalysisEntry } from '../batchAnalysis'
+
 import { lateGameFixture, RULES, countBoardStones } from '../../bots/__tests__/fixtures'
 
 interface AnalyzeOptions {
@@ -62,9 +62,9 @@ function createTestHarness(skipTablebase = true, maxTTEntries?: number) {
         state,
         timeBudgetMs: budgetMs,
         requestId: id,
-        playedPitIndex,
-        totalExtractionBudgetMs: opts?.totalExtractionBudgetMs,
-        perStepExtractionBudgetMs: opts?.perStepExtractionBudgetMs,
+        ...(playedPitIndex !== undefined ? { playedPitIndex } : {}),
+        ...(opts?.totalExtractionBudgetMs !== undefined ? { totalExtractionBudgetMs: opts.totalExtractionBudgetMs } : {}),
+        ...(opts?.perStepExtractionBudgetMs !== undefined ? { perStepExtractionBudgetMs: opts.perStepExtractionBudgetMs } : {}),
       })
     })
   }
@@ -116,10 +116,10 @@ describe('analysis end-to-end bounded-time guarantee', () => {
       }
 
       const legal = legalMoves(pos.state, RULES)
-      expect(legal).toContain(
-        r.entry.bestPitIndex,
+      expect(
+        legal,
         `Position ${i}: bestPitIndex ${r.entry.bestPitIndex} not in [${legal.join(',')}]`,
-      )
+      ).toContain(r.entry.bestPitIndex)
 
       const pitStones = countBoardStones(pos.state)
       if (pitStones > 12) {
@@ -140,10 +140,10 @@ describe('analysis end-to-end bounded-time guarantee', () => {
       let s = cloneState(pos.state)
       for (const pit of r.entry.pv) {
         const legal = legalMoves(s, RULES)
-        expect(legal).toContain(
-          pit,
+        expect(
+          legal,
           `Position ${i} PV step: pit ${pit} not legal in state with board [${s.board.join(',')}]`,
-        )
+        ).toContain(pit)
         s = applyMove(s, pit, RULES)
       }
     }

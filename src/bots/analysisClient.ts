@@ -61,7 +61,7 @@ function getWorker(): Worker {
             depthReached: msg.depthReached,
             rootScores: msg.rootScores ?? {},
             reachedTerminal: msg.reachedTerminal ?? false,
-            exactPlayedEval: msg.exactPlayedEval,
+            ...(msg.exactPlayedEval !== undefined ? { exactPlayedEval: msg.exactPlayedEval } : {}),
           })
         }
       } else if (msg.type === 'error') {

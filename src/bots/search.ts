@@ -1,6 +1,6 @@
 import type { GameState, RuleConfig, Side } from '../engine'
 import { BOTTOM_STORE, TOP_STORE, BOARD_LENGTH } from '../engine'
-import { legalMoves, applyMove, cloneState, extractPits, countPitStones, encodeProven } from '../engine'
+import { legalMoves, applyMove, cloneState } from '../engine'
 import type { EvaluationFn } from './evaluation'
 import { evaluateSimple, evaluateStrong, evaluateExpert, WIN_SCORE, MAX_PLY } from './evaluation'
 

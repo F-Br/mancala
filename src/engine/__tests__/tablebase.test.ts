@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { GameState, RuleConfig, Side } from '../index'
+import type { GameState, Side } from '../index'
 import {
   binom,
   compositionsCount,
@@ -15,7 +15,7 @@ import {
   legalMoves,
   KALAH_STANDARD,
   sizeAssertion,
-  NON_PROBEABLE,
+
   BOTTOM_STORE,
   TOP_STORE,
   getOffsets,

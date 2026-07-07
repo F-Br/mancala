@@ -1,21 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { iterativeDeepening, minimaxWithAB, TranspositionTable } from '../search'
 import type { SearchLimits } from '../search'
-import { evaluateSimple, evaluateStrong } from '../evaluation'
+import { evaluateSimple } from '../evaluation'
 import { legalMoves } from '../../engine'
 import {
   midGameFixture1,
   midGameFixture2,
   RULES,
 } from './fixtures'
-
-function countStonesOnBoard(state: typeof midGameFixture1): number {
-  let total = 0
-  for (let i = 0; i < state.board.length; i++) {
-    if (i !== 6 && i !== 13) total += state.board[i]!
-  }
-  return total
-}
 
 describe('SearchLimits deadline enforcement', () => {
   it('aborts inside recursion and returns NaN score', () => {
@@ -117,7 +109,6 @@ describe('No TT pollution from aborted searches', () => {
     // Reference: fresh TT, large budget, fixed depth
     const ttFresh = new TranspositionTable()
     const refResult = iterativeDeepening(state, 60000, RULES, evaluateSimple, ttFresh, undefined, undefined, maxDepth)
-    const refSize = ttFresh.size
 
     // Run once with tiny budget so it aborts at depth 2
     const ttWarm = new TranspositionTable()

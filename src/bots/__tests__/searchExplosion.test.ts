@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { minimaxWithABTT, TranspositionTable, iterativeDeepening } from '../search'
 import type { SearchLimits } from '../search'
 import { evaluateSimple } from '../evaluation'
-import { KALAH_STANDARD, createInitialState, applyMove, legalMoves } from '../../engine'
+import { KALAH_STANDARD } from '../../engine'
 import type { GameState } from '../../engine'
 import { initialFixture, midGameFixture1, midGameFixture2, lateGameFixture } from './fixtures'
 

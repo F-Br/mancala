@@ -138,16 +138,6 @@ function makeOffsets(K: number): number[] {
   return o
 }
 
-function makeIndexFn(K: number, offsets: number[]) {
-  return function index(pits: Uint8Array | number[], side: Side): number {
-    const k = totalPitStones(pits)
-    const off = offsets[k]!
-    const rank = rankPits(pits, k)
-    const ls = compositionsCount(k, PITS)
-    return off + rank + (side === 'bottom' ? 0 : ls)
-  }
-}
-
 function evaluateMove(
   pits: Uint8Array | number[],
   side: Side,
@@ -238,16 +228,6 @@ function computeTBEntry(
   }
 
   return best
-}
-
-function valueIteration(
-  pits: Uint8Array,
-  side: Side,
-  K: number,
-  rules: RuleConfig,
-  getTB: (p: Uint8Array | number[], s: Side) => number,
-): number {
-  return computeTBEntry(pits, side, rules, getTB)
 }
 
 export function generateTablebase(

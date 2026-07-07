@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Navigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { createInitialState, applyMove, cloneState } from '../../engine'
-import type { GameState, Move, Side, RuleConfig } from '../../engine'
+import { cloneState, applyMove } from '../../engine'
+import type { GameState, Side } from '../../engine'
 import {
   requestAnalysis,
   setOnTBProgress,
@@ -125,7 +125,7 @@ export function ReviewScreen() {
     firstProgressRef.current = true
     setProgress({ current: 0, total: moveCount, remaining: 0 })
 
-    const handleTbProgress = (msg: TbProgressMsg) => {
+    const handleTbProgress = (_msg: TbProgressMsg) => {
       if (!tbPhaseRef.current) {
         tbPhaseRef.current = true
         setTbPhase(true)

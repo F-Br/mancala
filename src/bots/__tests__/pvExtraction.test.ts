@@ -5,10 +5,10 @@ import {
 } from '../search'
 import type { CancelSignal } from '../search'
 import { evaluateExpert, evaluateSimple } from '../evaluation'
-import { applyMove, legalMoves, cloneState, createInitialState } from '../../engine'
+import { applyMove, legalMoves, cloneState } from '../../engine'
 import { BOTTOM_STORE, TOP_STORE } from '../../engine'
-import type { GameState, RuleConfig } from '../../engine'
-import { RULES, midGameFixture1, midGameFixture2, countBoardStones, hasExtraTurnMove } from './fixtures'
+import type { GameState } from '../../engine'
+import { RULES, midGameFixture1, midGameFixture2, countBoardStones } from './fixtures'
 
 function makeBoard(values: number[]): number[] {
   const board = new Array<number>(14).fill(0)
