@@ -27,11 +27,11 @@ export interface BatchAnalysisInput {
   /**
    * Per-position time budget in milliseconds for the main best-move search.
    *
-   * Budget arithmetic (for default 3000 ms):
-   *   3000 (best move)
-   *   + max(1050, 300) (played-move verification search, capped at 0.35× budget)
+   * Budget arithmetic (for default 8500 ms):
+   *   8500 (best move)
+   *   + max(2975, 300) (played-move verification search, capped at 0.35× budget)
    *   + 2500 (PV extraction, ~25 steps × 100 ms)
-   *   = ≤ 6850 ms worst case per position
+   *   = ≤ 13975 ms worst case per position
    *
    * This ceiling is used for time-remaining estimates in the UI until
    * real wall-clock timings accumulate.
@@ -41,14 +41,14 @@ export interface BatchAnalysisInput {
   signal?: { cancelled: boolean }
 }
 
-export const ANALYSIS_POSITION_BUDGET_MS = 3000
+export const ANALYSIS_POSITION_BUDGET_MS = 8500
 
 /**
  * Time-remaining estimate fallback used before any real wall-clock timings
- * are available. Based on max(3000, 1050, 2500) ≈ 6550 ms per position,
- * rounded up to 7000 for safety margin.
+ * are available. Based on max(8500, 2975, 2500) ≈ 13975 ms per position,
+ * rounded up to 14000 for safety margin.
  */
-export const ANALYSIS_CEILING_MS_PER_POSITION = 7000
+export const ANALYSIS_CEILING_MS_PER_POSITION = 14000
 
 export function replayPositions(
   gameState: GameState,

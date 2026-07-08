@@ -126,7 +126,7 @@ export class WorkerMessageHandler {
     cancelSignal: CancelSignal,
   ): void {
     const startTime = performance.now()
-    const budget = timeBudgetMs ?? (level === 'strong' ? 1500 : 3000)
+    const budget = timeBudgetMs ?? (level === 'strong' ? 1500 : 7000)
     const deadlineMs = startTime + budget
     const evalFn = level === 'strong' ? evaluateStrong : evaluateExpert
     const tt: TranspositionTable | null = level === 'expert' ? new TranspositionTable() : null
