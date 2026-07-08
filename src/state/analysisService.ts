@@ -73,6 +73,11 @@ setOnTBProgress((_msg: TbProgressMsg) => {
 })
 
 // ── Store ───────────────────────────────────────────────────────────
+//
+// NOTE: Bulk backfill of old unanalyzed history records was considered and
+// deliberately rejected. Auto-analyzing every legacy record on startup
+// could queue dozens of multi-minute jobs unprompted. The existing per-game
+// path covers them: opening any old game's review triggers a foreground job.
 
 export const useAnalysisService = create<AnalysisServiceState>()((set, get) => ({
   current: null,
@@ -238,6 +243,19 @@ function createAnalyzeCallback(signal: { cancelled: boolean }) {
     activeHandle = null
     return result
   }
+}
+
+// ── Pure helpers (testable without rendering) ────────────────────────
+
+export function recordAnalysisStatus(
+  gameText: string,
+  serviceState: { current: CurrentJob | null; queue: string[] },
+  hasAnalysis: boolean,
+): 'analyzing' | 'queued' | 'done' | 'none' {
+  if (serviceState.current?.gameText === gameText) return 'analyzing'
+  if (serviceState.queue.includes(gameText)) return 'queued'
+  if (hasAnalysis) return 'done'
+  return 'none'
 }
 
 // ── Test reset ──────────────────────────────────────────────────────

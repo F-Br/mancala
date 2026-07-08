@@ -11,6 +11,7 @@ import { useGameStore } from '../../state/gameStore'
 import { useModeStore } from '../../state/modeStore'
 import { useSettingsStore } from '../../state/settingsStore'
 import { useHistoryStore, type GameRecord } from '../../state/historyStore'
+import { useAnalysisService } from '../../state/analysisService'
 import { getAudioContext } from '../../audio/synth'
 import {
   playPlacement,
@@ -327,6 +328,14 @@ export function GameScreen() {
 
     addRecord(record)
     savedToHistoryRef.current = true
+
+    if (useSettingsStore.getState().autoAnalyzeEnabled) {
+      const { firstPlayer, rules } = useGameStore.getState()
+      useAnalysisService.getState().requestAnalysis(
+        { gameText: record.gameText, gameState: gs, firstPlayer, rules },
+        { foreground: false },
+      )
+    }
   }, [mode, botLevel, playerSide, savedMeta, addRecord])
 
   const handleStoneLanded = useCallback(

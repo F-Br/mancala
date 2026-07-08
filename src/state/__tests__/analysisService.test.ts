@@ -5,7 +5,8 @@ import type { GameState, Side, RuleConfig } from '../../engine'
 import { useGameStore } from '../gameStore'
 import type { AnalysisCacheEntry } from '../gameStore'
 import { useHistoryStore } from '../historyStore'
-import { _setAnalyzeFn, _resetForTest, useAnalysisService } from '../analysisService'
+import { _setAnalyzeFn, _resetForTest, useAnalysisService, recordAnalysisStatus } from '../analysisService'
+import type { CurrentJob } from '../analysisService'
 import type { AnalysisResult } from '../../bots/analysisClient'
 
 // ── Mocks ───────────────────────────────────────────────────────────
@@ -565,5 +566,216 @@ describe('analysisService', () => {
     const record2 = useHistoryStore.getState().records.find((r) => r.gameText === text2)
     expect(record1?.analysisResult).toBeDefined()
     expect(record2?.analysisResult).toBeDefined()
+  })
+
+  // ── Auto-analyze trigger ──────────────────────────────────────────
+
+  it('background request (foreground: false) runs and persists results', async () => {
+    const { gameState, firstPlayer } = buildGameWithMoves([2, 8, 1, 9])
+    const gameText = gameToText(gameState)
+
+    useHistoryStore.getState().addRecord({
+      id: 'bg-trigger',
+      mode: 'local-2p',
+      playerSide: 'bottom',
+      opponentLabel: 'P2',
+      result: 'win',
+      finalScore: { player: 24, opponent: 20 },
+      gameText,
+      dateISO: new Date().toISOString(),
+    })
+
+    _setAnalyzeFn(async () => makeFakeResult({ pitIndex: 3 }))
+
+    useAnalysisService.getState().requestAnalysis(
+      { gameText, gameState, firstPlayer, rules: KALAH_STANDARD },
+      { foreground: false },
+    )
+
+    await vi.waitFor(
+      () => {
+        expect(useAnalysisService.getState().current).toBeNull()
+      },
+      { timeout: 5000 },
+    )
+
+    const record = useHistoryStore.getState().records.find((r) => r.gameText === gameText)
+    expect(record?.analysisResult).toBeDefined()
+    expect(record!.analysisResult!.length).toBe(gameState.moveHistory.length)
+  })
+
+  // ── Overlay attach (Review Screen idempotent attach) ──────────────
+
+  it('foreground request for same gameText while background runs → idempotent attach, no second execution', async () => {
+    const { gameState, firstPlayer } = buildGameWithMoves([2, 8, 1, 9])
+    const gameText = gameToText(gameState)
+    const moveCount = gameState.moveHistory.length
+
+    useHistoryStore.getState().addRecord({
+      id: 'attach',
+      mode: 'local-2p',
+      playerSide: 'bottom',
+      opponentLabel: 'P2',
+      result: 'win',
+      finalScore: { player: 24, opponent: 20 },
+      gameText,
+      dateISO: new Date().toISOString(),
+    })
+
+    let analyzeCalls = 0
+    _setAnalyzeFn(async () => {
+      analyzeCalls++
+      await new Promise((r) => setTimeout(r, 10))
+      return makeFakeResult()
+    })
+
+    // Start background job
+    useAnalysisService.getState().requestAnalysis(
+      { gameText, gameState, firstPlayer, rules: KALAH_STANDARD },
+      { foreground: false },
+    )
+
+    await new Promise((r) => setTimeout(r, 5))
+
+    // Simulate Review Screen foreground request for same game
+    useAnalysisService.getState().requestAnalysis(
+      { gameText, gameState, firstPlayer, rules: KALAH_STANDARD },
+      { foreground: true },
+    )
+
+    await vi.waitFor(
+      () => {
+        expect(useAnalysisService.getState().current).toBeNull()
+      },
+      { timeout: 5000 },
+    )
+
+    // Only one execution — analyzeCalls equals moveCount, not 2x
+    expect(analyzeCalls).toBe(moveCount)
+  })
+
+  // ── Priority: background does not preempt foreground ──────────────
+
+  it('background trigger fires while foreground for different game runs → queues, does not preempt', async () => {
+    const fgGame = buildGameWithMoves([2, 8, 1, 9, 4])
+    const fgText = gameToText(fgGame.gameState)
+
+    const bgGame = buildGameWithMoves([3])
+    const bgText = gameToText(bgGame.gameState)
+
+    useHistoryStore.getState().addRecord({
+      id: 'prio-fg',
+      mode: 'local-2p',
+      playerSide: 'bottom',
+      opponentLabel: 'P2',
+      result: 'win',
+      finalScore: { player: 24, opponent: 20 },
+      gameText: fgText,
+      dateISO: new Date().toISOString(),
+    })
+    useHistoryStore.getState().addRecord({
+      id: 'prio-bg',
+      mode: 'local-2p',
+      playerSide: 'bottom',
+      opponentLabel: 'P2',
+      result: 'win',
+      finalScore: { player: 24, opponent: 20 },
+      gameText: bgText,
+      dateISO: new Date().toISOString(),
+    })
+
+    const runOrder: string[] = []
+    let fgAnalyzeCount = 0
+
+    _setAnalyzeFn(async () => {
+      const s = useAnalysisService.getState()
+      const currentText = s.current?.gameText ?? 'unknown'
+      runOrder.push(currentText)
+      if (currentText === fgText) {
+        fgAnalyzeCount++
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      return makeFakeResult()
+    })
+
+    // Start foreground job
+    useAnalysisService.getState().requestAnalysis(
+      { gameText: fgText, gameState: fgGame.gameState, firstPlayer: fgGame.firstPlayer, rules: KALAH_STANDARD },
+      { foreground: true },
+    )
+
+    // Give fg time to start its first analyze call
+    await new Promise((r) => setTimeout(r, 5))
+
+    // Background job queued while foreground runs
+    useAnalysisService.getState().requestAnalysis(
+      { gameText: bgText, gameState: bgGame.gameState, firstPlayer: bgGame.firstPlayer, rules: KALAH_STANDARD },
+      { foreground: false },
+    )
+
+    // Verify bg is in queue while fg is still running (delayed by 20ms per analyze call)
+    expect(useAnalysisService.getState().queue).toContain(bgText)
+
+    await vi.waitFor(
+      () => {
+        expect(useAnalysisService.getState().current).toBeNull()
+      },
+      { timeout: 5000 },
+    )
+
+    // Foreground completed first
+    const fgFirstIndex = runOrder.indexOf(fgText)
+    const bgFirstIndex = runOrder.indexOf(bgText)
+    expect(fgFirstIndex).toBeGreaterThanOrEqual(0)
+    expect(bgFirstIndex).toBeGreaterThan(fgFirstIndex) // bg runs after fg
+
+    const bgRecord = useHistoryStore.getState().records.find((r) => r.gameText === bgText)
+    expect(bgRecord?.analysisResult).toBeDefined()
+  })
+
+  // ── recordAnalysisStatus pure function ────────────────────────────
+
+  describe('recordAnalysisStatus', () => {
+    const fakeCurrent = (gameText: string): CurrentJob => ({
+      gameText,
+      progress: { current: 5, total: 20, remainingS: 30 },
+      tbPhase: false,
+    })
+
+    it('returns "analyzing" when gameText matches current job', () => {
+      expect(
+        recordAnalysisStatus('game-x', { current: fakeCurrent('game-x'), queue: [] }, false),
+      ).toBe('analyzing')
+    })
+
+    it('returns "queued" when gameText is in queue and not current', () => {
+      expect(
+        recordAnalysisStatus('game-x', { current: null, queue: ['game-x'] }, false),
+      ).toBe('queued')
+    })
+
+    it('returns "done" when not in service but has analysis', () => {
+      expect(
+        recordAnalysisStatus('game-x', { current: null, queue: [] }, true),
+      ).toBe('done')
+    })
+
+    it('returns "none" when not in service and no analysis', () => {
+      expect(
+        recordAnalysisStatus('game-x', { current: null, queue: [] }, false),
+      ).toBe('none')
+    })
+
+    it('returns "analyzing" even when hasAnalysis is true (current jobs take priority)', () => {
+      expect(
+        recordAnalysisStatus('game-x', { current: fakeCurrent('game-x'), queue: [] }, true),
+      ).toBe('analyzing')
+    })
+
+    it('returns "queued" even when hasAnalysis is true (queued takes priority)', () => {
+      expect(
+        recordAnalysisStatus('game-x', { current: null, queue: ['game-x'] }, true),
+      ).toBe('queued')
+    })
   })
 })

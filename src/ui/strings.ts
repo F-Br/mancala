@@ -80,6 +80,8 @@ export const strings = {
     resetAll: 'Reset All Settings',
     showPitCounts: 'Show Pit Counts',
     showPitCountsDesc: 'Display numbers next to pits',
+    autoAnalyze: 'Auto-analyze finished games',
+    autoAnalyzeDesc: 'Start move-by-move analysis in the background when a match ends.',
   },
   review: {
     title: 'Review',
@@ -127,6 +129,8 @@ export const strings = {
     replay: 'Replay',
     bestMoves: 'Best Moves',
     accuracy: 'Accuracy',
+    analyzing: 'Analyzing\u2026',
+    analysisQueued: 'Analysis queued',
   },
   stats: {
     title: 'Statistics',

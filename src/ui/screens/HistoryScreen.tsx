@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { parseGameText } from '../../engine'
 import { useGameStore } from '../../state/gameStore'
 import { useHistoryStore } from '../../state/historyStore'
+import { useAnalysisService, recordAnalysisStatus } from '../../state/analysisService'
+import type { CurrentJob } from '../../state/analysisService'
 import type { AnalysisCacheEntry } from '../../state/gameStore'
 import type { BotLevel } from '../../bots/types'
 import { coerceLegacySide } from '../../util/side'
@@ -62,17 +64,26 @@ type ResultFilter = 'all' | 'win' | 'loss' | 'draw'
 
 interface GameCardProps {
   record: ReturnType<typeof useHistoryStore.getState>['records'][number]
+  serviceCurrent: CurrentJob | null
+  serviceQueue: string[]
   onReview: () => void
   onDelete: () => void
 }
 
-function GameCard({ record, onReview, onDelete }: GameCardProps) {
+function GameCard({ record, serviceCurrent, serviceQueue, onReview, onDelete }: GameCardProps) {
   const accuracy = record.analysisResult?.length
     ? computeAccuracy(record.analysisResult)
     : null
   const graphPoints = record.analysisResult?.length
     ? buildGraphPoints(record.analysisResult)
     : null
+
+  const serviceSnapshot = { current: serviceCurrent, queue: serviceQueue }
+  const status = recordAnalysisStatus(
+    record.gameText,
+    serviceSnapshot,
+    !!record.analysisResult?.length,
+  )
 
   const resultLabel =
     record.result === 'win'
@@ -157,6 +168,18 @@ function GameCard({ record, onReview, onDelete }: GameCardProps) {
             {formatDate(record.dateISO)}
           </span>
 
+          {/* Analysis status */}
+          {status === 'analyzing' && serviceCurrent && (
+            <span className="text-label text-muted">
+              {strings.history.analyzing} {serviceCurrent.progress.current}/{serviceCurrent.progress.total}
+            </span>
+          )}
+          {status === 'queued' && (
+            <span className="text-label text-muted">
+              {strings.history.analysisQueued}
+            </span>
+          )}
+
           {/* Accuracy */}
           {accuracy !== null && (
             <div className="flex items-center gap-2">
@@ -199,6 +222,8 @@ export function HistoryScreen() {
   const navigate = useNavigate()
   const records = useHistoryStore((s) => s.records)
   const deleteRecord = useHistoryStore((s) => s.deleteRecord)
+  const serviceCurrent = useAnalysisService((s) => s.current)
+  const serviceQueue = useAnalysisService((s) => s.queue)
 
   const [modeFilter, setModeFilter] = useState<ModeFilter>('all')
   const [resultFilter, setResultFilter] = useState<ResultFilter>('all')
@@ -421,6 +446,8 @@ export function HistoryScreen() {
             <GameCard
               key={record.id}
               record={record}
+              serviceCurrent={serviceCurrent}
+              serviceQueue={serviceQueue}
               onReview={() => handleOpenReview(record)}
               onDelete={() => setDeleteTarget(record.id)}
             />

@@ -88,12 +88,20 @@ export function SettingsScreen() {
 
         {/* Gameplay */}
         <Card title="Gameplay">
-          <ToggleRow
-            label={strings.settings.liveHints}
-            description={strings.settings.liveHintsDesc}
-            checked={settings.liveHintsEnabled}
-            onChange={settings.setLiveHintsEnabled}
-          />
+          <div className="flex flex-col gap-4">
+            <ToggleRow
+              label={strings.settings.liveHints}
+              description={strings.settings.liveHintsDesc}
+              checked={settings.liveHintsEnabled}
+              onChange={settings.setLiveHintsEnabled}
+            />
+            <ToggleRow
+              label={strings.settings.autoAnalyze}
+              description={strings.settings.autoAnalyzeDesc}
+              checked={settings.autoAnalyzeEnabled}
+              onChange={settings.setAutoAnalyzeEnabled}
+            />
+          </div>
         </Card>
 
         {/* Feedback */}
