@@ -71,13 +71,12 @@ describe('self-play: expert vs strong', () => {
       if (game.winner === expertSide) expertWins++
     }
 
-    // Historically ≥55 % held reliably with the old evaluation. The current
-    // DEFAULT_WEIGHTS were tuned at 150 ms/move (63 % vs legacy Expert) and
-    // the expert/strong gap can shrink to ~50 % at 1500 ms/move because
-    // strong's simpler eval is competitive. The lower bound still guards
-    // against a catastrophic regression.
+    // ≥50 % guards against net-negative regression. The test is noisy
+    // (SE ≈ 13 % at n=14); a single spurious failure doesn't indicate a real
+    // problem, but a persistent below-coin-flip result across repeated CI
+    // runs would signal a genuine strength regression.
     console.log(`[EXPERT VS STRONG] ${expertWins}W / ${totalGames - expertWins}L = ${((expertWins / totalGames) * 100).toFixed(1)}%`)
-    expect(expertWins / totalGames).toBeGreaterThanOrEqual(0.43)
+    expect(expertWins / totalGames).toBeGreaterThanOrEqual(0.50)
   }, 600000)
 })
 
