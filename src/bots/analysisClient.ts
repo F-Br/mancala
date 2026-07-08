@@ -11,6 +11,7 @@ export interface AnalysisResult {
   rootScores: Record<number, number>
   reachedTerminal: boolean
   exactPlayedEval?: number
+  topMoves?: { pit: number; score: number }[]
 }
 
 export interface AnalysisHandle {
@@ -65,6 +66,7 @@ function getWorker(): Worker {
               rootScores: msg.rootScores ?? {},
               reachedTerminal: msg.reachedTerminal ?? false,
               ...(msg.exactPlayedEval !== undefined ? { exactPlayedEval: msg.exactPlayedEval } : {}),
+              ...(msg.topMoves ? { topMoves: msg.topMoves } : {}),
             })
           }
         }

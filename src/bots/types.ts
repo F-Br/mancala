@@ -61,6 +61,7 @@ export interface AnalysisResponse {
   reachedTerminal: boolean
   exactPlayedEval?: number
   cancelled?: boolean
+  topMoves?: { pit: number; score: number }[]
 }
 
 export interface AnalysisError {

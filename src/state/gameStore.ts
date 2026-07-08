@@ -14,6 +14,7 @@ export interface AnalysisCacheEntry {
   playedEval: number
   rootScores: Record<number, number>
   reachedTerminal: boolean
+  topMoves?: { pit: number; score: number }[]
 }
 
 export interface SavedMeta {

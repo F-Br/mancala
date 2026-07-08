@@ -114,6 +114,8 @@ export class AnalysisWorkerHandler {
     this.currentCancel = cancelSignal
     this.runningRequestId = msg.requestId
 
+    this.sharedTT.bumpGeneration()
+
     const {
       state,
       timeBudgetMs,
@@ -207,7 +209,80 @@ export class AnalysisWorkerHandler {
         }
       }
 
+      let topMovesResult: { pit: number; score: number }[] | undefined
+
       if (!cancelSignal.cancelled && bestResult.pv.length > 0) {
+        const moves = legalMoves(state, rules)
+        const topMoves: { pit: number; score: number }[] = []
+        const tbCovered = moves.length > 0 && this.probe?.(state) !== undefined
+
+        if (tbCovered) {
+          const scored: { pit: number; score: number }[] = []
+          for (const pit of moves) {
+            const child = applyMove(state, pit, rules)
+            const childLastMove = child.moveHistory[child.moveHistory.length - 1]
+            const wasExtraTurn = childLastMove?.wasExtraTurn ?? false
+            let childScore: number
+            if (child.status === 'finished') {
+              const base = evalFn(child, rules)
+              childScore = base === WIN_SCORE || base === -WIN_SCORE
+                ? adjustTerminalScore(base, 1)
+                : base
+            } else {
+              const tbChildScore = this.probe!(child)
+              childScore = tbChildScore ?? evalFn(child, rules)
+            }
+            scored.push({ pit, score: wasExtraTurn ? childScore : -childScore })
+          }
+          scored.sort((a, b) => b.score - a.score)
+          topMoves.push(...scored.slice(0, 3))
+        } else {
+          const rootScores = bestResult.rootScores
+          const sorted = Object.entries(rootScores)
+            .map(([k, v]) => ({ pit: Number(k), score: v }))
+            .sort((a, b) => b.score - a.score)
+
+          const bestPit = bestResult.pv[0]
+
+          if (sorted.length > 0 && bestPit !== undefined) {
+            topMoves.push({ pit: bestPit, score: bestResult.score })
+
+            const childSearchBudget = Math.max(150, Math.floor(timeBudgetMs * 0.15))
+            for (const cand of sorted) {
+              if (topMoves.length >= 3) break
+              if (cand.pit === bestPit) continue
+              const pit = cand.pit
+              const child = applyMove(state, pit, rules)
+              const childLastMove = child.moveHistory[child.moveHistory.length - 1]
+              const wasExtraTurn = childLastMove?.wasExtraTurn ?? false
+              let childScore: number
+              if (child.status === 'finished') {
+                const base = evalFn(child, rules)
+                childScore = base === WIN_SCORE || base === -WIN_SCORE
+                  ? adjustTerminalScore(base, 1)
+                  : base
+              } else {
+                const idResult = iterativeDeepening(
+                  child,
+                  childSearchBudget,
+                  rules,
+                  evalFn,
+                  tt,
+                  cancelSignal,
+                  1,
+                  undefined,
+                  this.probe ?? undefined,
+                )
+                childScore = idResult.score
+              }
+              topMoves.push({ pit, score: wasExtraTurn ? childScore : -childScore })
+            }
+          }
+        }
+
+        topMoves.sort((a, b) => b.score - a.score)
+        topMovesResult = topMoves.length > 0 ? topMoves : undefined
+
         const effTotalExtrBudget =
           totalExtractionBudgetMs ?? Math.min(2500, Math.max(500, Math.floor(timeBudgetMs * 0.83)))
         const effPerStepExtrBudget =
@@ -267,6 +342,7 @@ export class AnalysisWorkerHandler {
         reachedTerminal,
         ...(exactPlayedEval !== undefined ? { exactPlayedEval } : {}),
         ...(cancelSignal.cancelled ? { cancelled: true } : {}),
+        ...(topMovesResult ? { topMoves: topMovesResult } : {}),
       })
       if (this.currentCancel === cancelSignal) {
         this.currentCancel = null
