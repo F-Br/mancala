@@ -3,15 +3,10 @@ import { useNavigate, Navigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { cloneState, applyMove } from '../../engine'
 import type { GameState, Side } from '../../engine'
-import {
-  requestAnalysis,
-  setOnTBProgress,
-} from '../../bots/analysisClient'
-import type { AnalysisHandle } from '../../bots/analysisClient'
 import { useGameStore, type AnalysisCacheEntry, type SavedMeta } from '../../state/gameStore'
 import { useModeStore } from '../../state/modeStore'
 import { useSettingsStore } from '../../state/settingsStore'
-import { useHistoryStore } from '../../state/historyStore'
+import { useAnalysisService } from '../../state/analysisService'
 import { classificationColors, type ClassificationKey } from '../theme'
 import { classifyEvalDrop } from '../classification'
 import { shareGame } from '../share'
@@ -23,16 +18,11 @@ import { Chip } from '../components/Chip'
 import { ScorePanel } from '../components/ScorePanel'
 import { EvalGraph, type EvalGraphPoint } from '../components/EvalGraph'
 import {
-  executeBatchAnalysis,
   replayPositions,
-  ANALYSIS_POSITION_BUDGET_MS,
-  ANALYSIS_CEILING_MS_PER_POSITION,
   isCacheHealthy,
   isPVActive,
   type PositionInfo,
-  type BatchProgress,
 } from '../batchAnalysis'
-import type { TbProgressMsg } from '../../engine'
 
 const classificationLabel: Record<ClassificationKey, string> = {
   best: strings.review.best,
@@ -80,29 +70,23 @@ export function ReviewScreen() {
   const rules = useGameStore((s) => s.rules)
   const savedMeta = useGameStore((s) => s.savedMeta)
   const analysisCache = useGameStore((s) => s.analysisCache)
-  const setAnalysisCache = useGameStore((s) => s.setAnalysisCache)
 
-  const updateAnalysisInHistory = useHistoryStore((s) => s.updateAnalysis)
   const animationSpeed = useSettingsStore((s) => s.animationSpeed)
   const showPitCounts = useSettingsStore((s) => s.showPitCounts)
 
-  const [analyzing, setAnalyzing] = useState(false)
-  const [tbPhase, setTbPhase] = useState(false)
-  const [progress, setProgress] = useState({ current: 0, total: 0, remaining: 0 })
+  const serviceCurrent = useAnalysisService((s) => s.current)
+  const serviceQueue = useAnalysisService((s) => s.queue)
+  const serviceRequestAnalysis = useAnalysisService((s) => s.requestAnalysis)
+
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showPV, setShowPV] = useState(false)
   const [pvStep, setPvStep] = useState(0)
-  const [localCache, setLocalCache] = useState<AnalysisCacheEntry[] | null>(null)
   const [playing, setPlaying] = useState(false)
   const [shareStatus, setShareStatus] = useState<string | null>(null)
 
-  const analysisRef = useRef<AnalysisHandle | null>(null)
   const pvTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pvIndexAtStart = useRef<number | null>(null)
   const playbackRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const updateHistoryRef = useRef(false)
-  const tbPhaseRef = useRef(false)
-  const firstProgressRef = useRef(true)
 
   const effectiveSpeed = animationSpeed > 0 ? animationSpeed : 1
 
@@ -111,89 +95,41 @@ export function ReviewScreen() {
       ? coerceLegacySide(savedMeta.playerSide)
       : null
 
-  const cache = localCache ?? analysisCache
+  const gameText = useMemo(() => {
+    if (!gameState) return null
+    return gameToText(gameState)
+  }, [gameState])
+
+  const cache = analysisCache
+
+  const analyzing = !!gameText && (
+    serviceCurrent?.gameText === gameText || serviceQueue.includes(gameText)
+  )
+
+  const progress = serviceCurrent?.gameText === gameText
+    ? serviceCurrent.progress
+    : { current: 0, total: 0, remainingS: 0 }
+
+  const tbPhase = serviceCurrent?.gameText === gameText
+    ? serviceCurrent.tbPhase
+    : false
 
   const positions = useMemo(() => {
     if (!gameState) return []
     return replayPositions(gameState, firstPlayer, rules)
   }, [gameState, firstPlayer, rules])
 
-  const runBatchAnalysis = useCallback(async (signal: { cancelled: boolean }) => {
-    if (!gameState || positions.length <= 1) return
-    const moveCount = gameState.moveHistory.length
-    setAnalyzing(true)
-    tbPhaseRef.current = false
-    firstProgressRef.current = true
-    setProgress({ current: 0, total: moveCount, remaining: 0 })
-
-    const handleTbProgress = (_msg: TbProgressMsg) => {
-      if (!tbPhaseRef.current) {
-        tbPhaseRef.current = true
-        setTbPhase(true)
-      }
-    }
-
-    setOnTBProgress(handleTbProgress)
-
-    const batchResult = await executeBatchAnalysis({
-      positions,
-      analyze: async (state, budgetMs, playedPitIndex) => {
-        const handle = await requestAnalysis(state, budgetMs, playedPitIndex)
-        analysisRef.current = handle
-        const result = await handle.promise
-        analysisRef.current = null
-        return result
-      },
-      positionBudgetMs: ANALYSIS_POSITION_BUDGET_MS,
-      onProgress: (p: BatchProgress) => {
-        if (tbPhaseRef.current && p.current > 0) {
-          tbPhaseRef.current = false
-          setTbPhase(false)
-        }
-        let remaining = p.remainingS
-        if (firstProgressRef.current && remaining === 0 && p.current > 0 && p.current < p.total) {
-          remaining = Math.round((p.total - p.current) * ANALYSIS_CEILING_MS_PER_POSITION / 1000)
-          firstProgressRef.current = false
-        }
-        setProgress({ current: p.current, total: p.total, remaining })
-      },
-      signal,
-    })
-
-    setOnTBProgress(null)
-
-    if (signal.cancelled) return
-
-    const entries: AnalysisCacheEntry[] = batchResult.map((r) => r.entry)
-    setLocalCache(entries)
-    setAnalysisCache(entries)
-    setAnalyzing(false)
-    setTbPhase(false)
-    updateHistoryRef.current = true
-  }, [gameState, positions, rules, setAnalysisCache])
-
   useEffect(() => {
+    if (!gameState || !gameText) return
     if (cache && isCacheHealthy(cache)) return
-    const signal = { cancelled: false }
-    runBatchAnalysis(signal)
-    return () => {
-      signal.cancelled = true
-      if (analysisRef.current) analysisRef.current.cancel()
-    }
-  }, [cache, runBatchAnalysis])
-
-  useEffect(() => {
-    if (updateHistoryRef.current && cache && gameState) {
-      updateHistoryRef.current = false
-      const gt = gameToText(gameState)
-      updateAnalysisInHistory(gt, cache)
-    }
-  }, [cache, gameState, updateAnalysisInHistory])
+    serviceRequestAnalysis(
+      { gameText, gameState, firstPlayer, rules },
+      { foreground: true },
+    )
+  }, [gameText, gameState, firstPlayer, rules, cache, serviceRequestAnalysis])
 
   useEffect(() => {
     return () => {
-      setOnTBProgress(null)
-      if (analysisRef.current) analysisRef.current.cancel()
       if (pvTimerRef.current) clearInterval(pvTimerRef.current)
       if (playbackRef.current) clearInterval(playbackRef.current)
     }
@@ -437,12 +373,9 @@ export function ReviewScreen() {
     ? playerNameShort(playerSide === 'bottom' ? 'top' : 'bottom', savedMeta)
     : strings.game.player2
 
-  if (!gameState && !localCache) {
-    if (!useGameStore.getState().gameState) {
-      return <Navigate to="/home" replace />
-    }
+  if (!gameState) {
+    return <Navigate to="/home" replace />
   }
-  if (!gameState) return null
 
   const maxIndex = positions.length - 1
 
@@ -500,9 +433,9 @@ export function ReviewScreen() {
             {tbPhase
               ? ''
               : strings.review.progress(progress.current, progress.total)}
-            {progress.remaining > 30 && !tbPhase && (
+            {progress.remainingS > 30 && !tbPhase && (
               <span className="ml-2">
-                &middot; ~{Math.floor(progress.remaining / 60)}m{String(progress.remaining % 60).padStart(2, '0')}s
+                &middot; ~{Math.floor(progress.remainingS / 60)}m{String(progress.remainingS % 60).padStart(2, '0')}s
               </span>
             )}
           </p>

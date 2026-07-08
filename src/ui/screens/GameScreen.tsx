@@ -5,7 +5,7 @@ import { legalMoves, gameToText } from '../../engine'
 import type { GameState as EngineGameState, Move, Side } from '../../engine'
 import { requestBotMove, terminateBotWorker } from '../../bots/client'
 import type { BotMoveHandle } from '../../bots/client'
-import { requestAnalysis, terminateAnalysisWorker } from '../../bots/analysisClient'
+import { requestAnalysis } from '../../bots/analysisClient'
 import type { AnalysisHandle } from '../../bots/analysisClient'
 import { useGameStore } from '../../state/gameStore'
 import { useModeStore } from '../../state/modeStore'
@@ -368,7 +368,6 @@ export function GameScreen() {
     cancelBot()
     cancelAnalysis()
     terminateBotWorker()
-    terminateAnalysisWorker()
     clear()
     useModeStore.getState().setMode(null)
     navigate('/home')
