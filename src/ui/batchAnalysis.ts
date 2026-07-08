@@ -31,8 +31,7 @@ export interface BatchAnalysisInput {
    *   3000 (best move)
    *   + max(1050, 300) (played-move verification search, capped at 0.35× budget)
    *   + 2500 (PV extraction, ~25 steps × 100 ms)
-   *   + 2 × max(450, 150) (top-2 alternative child searches, 0.15× budget each)
-   *   = ≤ 7750 ms worst case per position
+   *   = ≤ 6850 ms worst case per position
    *
    * This ceiling is used for time-remaining estimates in the UI until
    * real wall-clock timings accumulate.
@@ -46,10 +45,10 @@ export const ANALYSIS_POSITION_BUDGET_MS = 3000
 
 /**
  * Time-remaining estimate fallback used before any real wall-clock timings
- * are available. Based on 3000 + 1050 + 2500 + 900 ≈ 7450 ms per position,
- * rounded up to 8000 for safety margin.
+ * are available. Based on max(3000, 1050, 2500) ≈ 6550 ms per position,
+ * rounded up to 7000 for safety margin.
  */
-export const ANALYSIS_CEILING_MS_PER_POSITION = 8000
+export const ANALYSIS_CEILING_MS_PER_POSITION = 7000
 
 export function replayPositions(
   gameState: GameState,
@@ -147,7 +146,6 @@ export async function executeBatchAnalysis({
           playedEval,
           rootScores: result.rootScores ?? {},
           reachedTerminal: result.reachedTerminal ?? false,
-          ...(result.topMoves ? { topMoves: result.topMoves } : {}),
         },
         reachedTerminal: result.reachedTerminal ?? false,
       })

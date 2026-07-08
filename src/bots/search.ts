@@ -91,20 +91,14 @@ export interface TTEntry {
   flag: 'exact' | 'lower' | 'upper'
   bestMove: number
   lock: number
-  gen?: number
 }
 
 export class TranspositionTable {
   private table = new Map<number, TTEntry>()
   readonly maxEntries: number
-  private generation = 0
 
   constructor(maxEntries = 2_000_000) {
     this.maxEntries = maxEntries
-  }
-
-  bumpGeneration(): void {
-    this.generation++
   }
 
   computeHash(state: GameState): number {
@@ -124,20 +118,13 @@ export class TranspositionTable {
   set(hash: number, entry: TTEntry): void {
     const existing = this.table.get(hash)
     if (!existing || entry.depth >= existing.depth) {
+      // Cap map size. A full reset is acceptable and simple.
+      // Per-slot depth-preferred replacement cannot bound a Map keyed by hash
+      // because the hash space is too large to walk every slot.
       if (!existing && this.table.size >= this.maxEntries) {
-        let freed = false
-        for (const [key, val] of this.table) {
-          if (val.gen != null && val.gen < this.generation - 1) {
-            this.table.delete(key)
-            freed = true
-          }
-        }
-        if (!freed) {
-          this.table.clear()
-        }
+        this.table.clear()
       }
-      entry.gen = this.generation
-      this.table.set(hash, entry as TTEntry & { gen: number })
+      this.table.set(hash, entry)
     }
   }
 

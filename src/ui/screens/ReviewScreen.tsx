@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import React from 'react'
 import { useNavigate, Navigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { cloneState, applyMove } from '../../engine'
@@ -662,18 +661,6 @@ export function ReviewScreen() {
                     </span>
                   )}
                 </>
-              )}
-
-              {!pvActive && currentEntry?.topMoves && currentEntry.topMoves.length >= 2 && (
-                <span className="text-label text-muted text-[10px]">
-                  {currentEntry.topMoves.map((m, i) => (
-                    <React.Fragment key={m.pit}>
-                      {i > 0 && ' \u00B7 '}
-                      <span className="font-mono">{notatePit(m.pit)}</span>
-                      {' '}{m.score >= 0 ? '+' : ''}{m.score.toFixed(1)}
-                    </React.Fragment>
-                  ))}
-                </span>
               )}
             </div>
 
