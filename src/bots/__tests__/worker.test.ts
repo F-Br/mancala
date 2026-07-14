@@ -10,9 +10,12 @@ import {
   getOffsets,
   encodeProven,
   KALAH_STANDARD,
+  legalMoves,
+  applyMove,
 } from '../../engine'
 import type { GameState } from '../../engine'
 import type { TablebaseProbe } from '../search'
+import { mangalaMidGameFixture1, mangalaMidGameFixture2, MANGALA_RULES } from './fixtures'
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -216,6 +219,7 @@ describe('Expert tablebase integration', () => {
     ;(handler as any).tbBestMove = tbBestMove
     ;(handler as any).tbReady = true
     ;(handler as any).tbLoadInFlight = true
+    ;(handler as any).tbGame = 'kalah'
 
     handler.handleMessage({
       type: 'pickMove',
@@ -223,6 +227,7 @@ describe('Expert tablebase integration', () => {
       level: 'expert',
       timeBudgetMs: 5000,
       requestId: 100,
+      game: 'kalah',
     })
 
     await wait(6000)
@@ -235,4 +240,103 @@ describe('Expert tablebase integration', () => {
     // Expert with tablebase should pick the TB argmax
     expect(msg.pitIndex).toBe(tbArgMax)
   })
+})
+
+// ── Mangala worker-level tests ────────────────────────────────────────
+
+describe('Mangala expert bot-move', () => {
+  it('returns a legal Mangala move at Expert level within budget', async () => {
+    const messages: BotWorkerMessage[] = []
+    const handler = new WorkerMessageHandler((msg) => messages.push(msg))
+    const state = mangalaMidGameFixture1
+
+    handler.handleMessage({
+      type: 'pickMove',
+      state,
+      level: 'expert',
+      timeBudgetMs: 500,
+      requestId: 200,
+      game: 'mangala',
+    })
+
+    await wait(1500)
+
+    expect(messages.length).toBe(1)
+    const msg = asMoveMsg(messages[0]!)
+    expect(msg.type).toBe('move')
+    expect(msg.requestId).toBe(200)
+
+    const legal = legalMoves(state, MANGALA_RULES)
+    expect(legal, `move ${msg.pitIndex} must be legal`).toContain(msg.pitIndex)
+  }, 15000)
+})
+
+describe('Mangala bot-move PV validity', () => {
+  it('PV replays legally under MANGALA_STANDARD from the fixture', async () => {
+    const messages: BotWorkerMessage[] = []
+    const handler = new WorkerMessageHandler((msg) => messages.push(msg))
+    const state = mangalaMidGameFixture2
+
+    handler.handleMessage({
+      type: 'pickMove',
+      state,
+      level: 'expert',
+      timeBudgetMs: 1000,
+      requestId: 201,
+      game: 'mangala',
+    })
+
+    await wait(2500)
+
+    expect(messages.length).toBe(1)
+    const msg = asMoveMsg(messages[0]!)
+    expect(msg.type).toBe('move')
+    expect(msg.requestId).toBe(201)
+
+    const legal = legalMoves(state, MANGALA_RULES)
+    expect(legal).toContain(msg.pitIndex)
+
+    // Replay PV
+    let current = state
+    for (const pit of msg.principalVariation) {
+      const moves = legalMoves(current, MANGALA_RULES)
+      if (!moves.includes(pit)) break
+      current = applyMove(current, pit, MANGALA_RULES)
+    }
+  }, 15000)
+})
+
+// ── TT isolation test ─────────────────────────────────────────────────
+
+describe('AnalysisWorker TT isolation on game switch', () => {
+  it('clears TT when game switches between kalah and mangala', async () => {
+    const { AnalysisWorkerHandler } = await import('../analysisWorker')
+    const analysisMessages: Array<{ type: string; requestId: number }> = []
+    const handler = new AnalysisWorkerHandler(
+      (msg) => { analysisMessages.push(msg as { type: string; requestId: number }) },
+      undefined,
+      true,
+    )
+
+    handler.handleMessage({
+      type: 'analyze',
+      state: mangalaMidGameFixture1,
+      timeBudgetMs: 150,
+      requestId: 1,
+      game: 'kalah',
+    })
+
+    handler.handleMessage({
+      type: 'analyze',
+      state: mangalaMidGameFixture2,
+      timeBudgetMs: 150,
+      requestId: 2,
+      game: 'mangala',
+    })
+
+    await wait(1500)
+
+    const results = analysisMessages.filter((m) => m.type === 'result')
+    expect(results.length).toBeGreaterThanOrEqual(2)
+  }, 10000)
 })

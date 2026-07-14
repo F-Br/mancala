@@ -1,4 +1,4 @@
-import type { GameState, RuleConfig, Side } from '../engine'
+import type { GameState, RuleConfig, Side, GameId } from '../engine'
 import { BOTTOM_STORE, TOP_STORE } from '../engine'
 import { legalMoves, applyMove } from '../engine'
 
@@ -80,7 +80,7 @@ function maxOppCaptureThreat(state: GameState, rules: RuleConfig): number {
 }
 
 function extraTurnMovesAvailable(state: GameState, rules: RuleConfig): number {
-  const { pitsPerSide } = rules
+  const { pitsPerSide, sowing } = rules
   const player = state.currentPlayer
   const totalSowPositions = 2 * pitsPerSide + 1
   const ownStoreSowIndex = pitsPerSide
@@ -93,8 +93,26 @@ function extraTurnMovesAvailable(state: GameState, rules: RuleConfig): number {
     const stones = state.board[i] ?? 0
     if (stones === 0) continue
     const startIdx = player === 'bottom' ? i : i - pitsPerSide - 1
-    if ((startIdx + stones) % totalSowPositions === ownStoreSowIndex) {
-      count++
+
+    if (sowing === 'include-source') {
+      // In include-source, the first stone of a 2+-stone move returns to the
+      // source pit. For s === 1 the single stone is sown to the next position.
+      // Last stone lands at cycle index:
+      //   s === 1: (startIdx + 1) % totalSowPositions
+      //   s >= 2:  (startIdx + s - 1) % totalSowPositions
+      if (stones === 1) {
+        if ((startIdx + 1) % totalSowPositions === ownStoreSowIndex) {
+          count++
+        }
+      } else {
+        if ((startIdx + stones - 1) % totalSowPositions === ownStoreSowIndex) {
+          count++
+        }
+      }
+    } else {
+      if ((startIdx + stones) % totalSowPositions === ownStoreSowIndex) {
+        count++
+      }
     }
   }
   return count
@@ -149,6 +167,21 @@ export const DEFAULT_WEIGHTS: EvalWeights = {
   oppCaptureThreatPerStone: 0,
   extraTurnMove: 0,
   emptyPitSetup: 0.2,
+}
+
+/**
+ * Per-game eval weights. Mangala starts as a copy of the Kalah defaults with
+ * pit-stone weights zeroed because the reversed end-sweep (the emptied player
+ * collects the opponent's remaining stones) makes Kalah's hoard-friendly
+ * positive pit weights strategically backwards. Zero is a neutral starting
+ * point pending self-play tuning in a later step.
+ */
+export const WEIGHTS_BY_GAME: Record<GameId, EvalWeights> = {
+  kalah: DEFAULT_WEIGHTS,
+  mangala: {
+    ...DEFAULT_WEIGHTS,
+    pitStones: [0, 0, 0, 0, 0, 0],
+  },
 }
 
 /** Weights that closely reproduce the old evaluateExpertLegacy output. */

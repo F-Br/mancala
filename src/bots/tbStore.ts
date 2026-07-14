@@ -1,6 +1,5 @@
-import type { GameState } from '../engine'
+import type { GameState, RuleConfig, GameId } from '../engine'
 import {
-  KALAH_STANDARD,
   getOffsets,
   getTotalSize,
   extractPits,
@@ -11,10 +10,12 @@ import {
 import type { TablebaseProbe } from './search'
 
 export const TB_K = 12
-const TB_RULES_VERSION = 'kalah-standard-v1'
 const IDB_NAME = 'mancala-tablebase'
 const IDB_STORE = 'tables'
-const IDB_KEY = `tb-k${TB_K}-${TB_RULES_VERSION}`
+
+function idbKey(game: GameId): string {
+  return `tb-k${TB_K}-${game}-v1`
+}
 
 function hasIDB(): boolean {
   try {
@@ -45,8 +46,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   return Promise.race([promise, timer])
 }
 
-export function loadTablebaseFromIDB(): Promise<Int8Array | null> {
+export function loadTablebaseFromIDB(game: GameId): Promise<Int8Array | null> {
   if (!hasIDB()) return Promise.resolve(null)
+  const key = idbKey(game)
   return withTimeout(
     openIDB()
       .then((db) => {
@@ -54,7 +56,7 @@ export function loadTablebaseFromIDB(): Promise<Int8Array | null> {
           try {
             const tx = db.transaction(IDB_STORE, 'readonly')
             const store = tx.objectStore(IDB_STORE)
-            const req = store.get(IDB_KEY)
+            const req = store.get(key)
             req.onsuccess = () => {
               const val = req.result
               if (val instanceof Int8Array) {
@@ -77,8 +79,9 @@ export function loadTablebaseFromIDB(): Promise<Int8Array | null> {
   )
 }
 
-export function saveTablebaseToIDB(table: Int8Array): Promise<void> {
+export function saveTablebaseToIDB(table: Int8Array, game: GameId): Promise<void> {
   if (!hasIDB()) return Promise.resolve()
+  const key = idbKey(game)
   return withTimeout(
     openIDB()
       .then((db) => {
@@ -86,7 +89,7 @@ export function saveTablebaseToIDB(table: Int8Array): Promise<void> {
           try {
             const tx = db.transaction(IDB_STORE, 'readwrite')
             const store = tx.objectStore(IDB_STORE)
-            store.put(table, IDB_KEY)
+            store.put(table, key)
             tx.oncomplete = () => resolve()
             tx.onerror = () => reject(tx.error)
           } catch (e) {
@@ -100,7 +103,7 @@ export function saveTablebaseToIDB(table: Int8Array): Promise<void> {
   )
 }
 
-export function buildProbes(table: Int8Array): {
+export function buildProbes(table: Int8Array, rules: RuleConfig): {
   probe: TablebaseProbe
   tbBestMove: (state: GameState) => number | undefined
 } {
@@ -120,7 +123,7 @@ export function buildProbes(table: Int8Array): {
     return encodeProven(sd + tb)
   }
 
-  const tbBestMove = createTablebaseBestMove(table, offsets, TB_K, KALAH_STANDARD)
+  const tbBestMove = createTablebaseBestMove(table, offsets, TB_K, rules)
 
   return { probe, tbBestMove }
 }

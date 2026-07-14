@@ -1,6 +1,6 @@
-import type { GameState, RuleConfig } from '../engine'
+import type { GameState, RuleConfig, GameId } from '../engine'
 import {
-  KALAH_STANDARD,
+  getRulesForGame,
   legalMoves,
   applyMove,
   generateTablebase,
@@ -15,7 +15,7 @@ import {
   ExtraTurnConfig,
 } from './search'
 import type { CancelSignal, SearchLimits, TablebaseProbe } from './search'
-import { evaluateExpert, WIN_SCORE } from './evaluation'
+import { evaluateExpert, WIN_SCORE, WEIGHTS_BY_GAME } from './evaluation'
 import type { AnalysisMessage, AnalysisWorkerMessage, AnalysisRequest } from './types'
 import type { TbProgressMsg } from '../engine'
 import { loadTablebaseFromIDB, saveTablebaseToIDB, buildProbes, TB_K } from './tbStore'
@@ -30,6 +30,9 @@ export class AnalysisWorkerHandler {
   private tbInitStarted = false
   private queue: AnalysisRequest[] = []
   private runningRequestId: number | null = null
+  private tbGame: GameId | null = null
+  private currentGame: GameId | null = null
+  private readonly skipTablebase: boolean
 
   constructor(
     postMsg: (msg: AnalysisWorkerMessage | TbProgressMsg) => void,
@@ -38,6 +41,7 @@ export class AnalysisWorkerHandler {
   ) {
     this.postMsg = postMsg
     this.sharedTT = new TranspositionTable(maxTTEntries)
+    this.skipTablebase = skipTablebase
     if (skipTablebase) {
       this.tbInitStarted = true
     }
@@ -54,7 +58,16 @@ export class AnalysisWorkerHandler {
     }
 
     if (msg.type === 'analyze') {
-      this.ensureTablebaseInit()
+      const game: GameId = msg.game ?? 'kalah'
+      if (this.currentGame !== game) {
+        this.sharedTT.clear()
+        this.currentGame = game
+      }
+      if (this.tbGame !== game && !this.skipTablebase) {
+        this.tbReady = false
+        this.tbInitStarted = false
+      }
+      this.ensureTablebaseInit(game)
       this.queue.push(msg)
       if (this.runningRequestId === null) {
         this.dequeueAndStart()
@@ -62,20 +75,22 @@ export class AnalysisWorkerHandler {
     }
   }
 
-  private ensureTablebaseInit(): void {
+  private ensureTablebaseInit(game: GameId): void {
     if (this.tbInitStarted) return
     this.tbInitStarted = true
-    this.initTablebase()
+    this.initTablebase(game)
   }
 
-  private async initTablebase(): Promise<void> {
+  private async initTablebase(game: GameId): Promise<void> {
     try {
-      const cached = await loadTablebaseFromIDB()
+      const cached = await loadTablebaseFromIDB(game)
       if (cached && cached.length === getTotalSize(TB_K)) {
-        const { probe, tbBestMove } = buildProbes(cached)
+        const rules = getRulesForGame(game)
+        const { probe, tbBestMove } = buildProbes(cached, rules)
         this.probe = probe
         this.tbBestMove = tbBestMove
         this.tbReady = true
+        this.tbGame = game
         return
       }
     } catch {
@@ -83,26 +98,28 @@ export class AnalysisWorkerHandler {
     }
 
     try {
+      const rules = getRulesForGame(game)
       const { table, nonProbeableCount } = generateTablebase(
         TB_K,
-        KALAH_STANDARD,
+        rules,
         (msg: TbProgressMsg) => {
           this.postMsg(msg)
         },
       )
 
-      const { probe, tbBestMove } = buildProbes(table)
+      const { probe, tbBestMove } = buildProbes(table, rules)
       this.probe = probe
       this.tbBestMove = tbBestMove
       this.tbReady = true
+      this.tbGame = game
 
       if (nonProbeableCount > 0) {
         console.warn(
-          `Tablebase generation: ${nonProbeableCount} non-probeable entries at K=${TB_K}`,
+          `Tablebase generation: ${nonProbeableCount} non-probeable entries at K=${TB_K} for game=${game}`,
         )
       }
 
-      saveTablebaseToIDB(table).catch(() => {})
+      saveTablebaseToIDB(table, game).catch(() => {})
     } catch (err) {
       console.error('Tablebase generation failed:', err)
       // Continue without tablebase — search works normally
@@ -121,8 +138,10 @@ export class AnalysisWorkerHandler {
       playedPitIndex,
       totalExtractionBudgetMs,
       perStepExtractionBudgetMs,
+      game,
     } = msg
-    const rules = KALAH_STANDARD
+    const gameId: GameId = game ?? 'kalah'
+    const rules = getRulesForGame(gameId)
 
     try {
       this.runExpertSearch(
@@ -131,6 +150,7 @@ export class AnalysisWorkerHandler {
         rules,
         requestId,
         cancelSignal,
+        gameId,
         playedPitIndex,
         totalExtractionBudgetMs,
         perStepExtractionBudgetMs,
@@ -163,6 +183,7 @@ export class AnalysisWorkerHandler {
     rules: RuleConfig,
     requestId: number,
     cancelSignal: CancelSignal,
+    gameId: GameId,
     playedPitIndex: number | undefined,
     totalExtractionBudgetMs?: number,
     perStepExtractionBudgetMs?: number,
@@ -170,7 +191,8 @@ export class AnalysisWorkerHandler {
     const startTime = performance.now()
     const budget = timeBudgetMs
     const deadlineMs = startTime + timeBudgetMs
-    const evalFn = evaluateExpert
+    const weights = WEIGHTS_BY_GAME[gameId]
+    const evalFn = (s: GameState, r: RuleConfig) => evaluateExpert(s, r, weights)
     const tt = this.sharedTT
 
     const limits: SearchLimits = {

@@ -8,10 +8,17 @@ import {
   extraTurnMovesAvailable,
 } from '../evaluation'
 import type { EvalWeights } from '../evaluation'
+import { WEIGHTS_BY_GAME } from '../evaluation'
 import { createInitialState, computeMoveDetails } from '../../engine'
-import { KALAH_STANDARD } from '../../engine'
+import { KALAH_STANDARD, MANGALA_STANDARD } from '../../engine'
 import { BOTTOM_STORE, TOP_STORE } from '../../engine'
 import type { GameState } from '../../engine'
+import {
+  mangalaMidGameFixture1,
+  mangalaMidGameFixture2,
+  mangalaLateGameFixture,
+  MANGALA_RULES,
+} from './fixtures'
 
 function makeBoard(values: number[]): number[] {
   const board = new Array<number>(14).fill(0)
@@ -533,5 +540,97 @@ describe('evaluateExpert sign convention', () => {
     expect(topEval).toBe(-bottomEval)
     expect(topEval).toBeLessThan(0)
     expect(bottomEval).toBeGreaterThan(0)
+  })
+})
+
+// ── Mangala extra-turn formula test ─────────────────────────────────────
+
+describe('extraTurnMovesAvailable formula (Mangala)', () => {
+  function boardWithOnePit(pitIndex: number, stones: number): number[] {
+    const board = new Array<number>(14).fill(0)
+    board[pitIndex] = stones
+    return board
+  }
+
+  const MANGALA = MANGALA_STANDARD
+  const pitsPerSide = 6
+
+  it('matches computeMoveDetails for every pit and count up to 20 (bottom)', () => {
+    for (let pit = 0; pit < pitsPerSide; pit++) {
+      for (let stones = 1; stones <= 20; stones++) {
+        const board = boardWithOnePit(pit, stones)
+        const state: GameState = {
+          board,
+          currentPlayer: 'bottom',
+          status: 'in-progress',
+          winner: null,
+          moveHistory: [],
+        }
+
+        const { move } = computeMoveDetails(board, pit, 'bottom', MANGALA)
+        const actualExtraTurn = move.wasExtraTurn
+
+        const etCount = extraTurnMovesAvailable(state, MANGALA)
+        const expectedExtraTurn = etCount > 0
+
+        expect(
+          expectedExtraTurn,
+          `Mangala pit=${pit} stones=${stones}: formula says ${expectedExtraTurn}, computeMoveDetails says ${actualExtraTurn}`,
+        ).toBe(actualExtraTurn)
+      }
+    }
+  })
+
+  it('matches computeMoveDetails for every pit and count up to 20 (top)', () => {
+    for (let pitIdx = 0; pitIdx < pitsPerSide; pitIdx++) {
+      const boardPit = pitsPerSide + 1 + pitIdx
+      for (let stones = 1; stones <= 20; stones++) {
+        const board = boardWithOnePit(boardPit, stones)
+        const state: GameState = {
+          board,
+          currentPlayer: 'top',
+          status: 'in-progress',
+          winner: null,
+          moveHistory: [],
+        }
+
+        const { move } = computeMoveDetails(board, boardPit, 'top', MANGALA)
+        const actualExtraTurn = move.wasExtraTurn
+
+        const etCount = extraTurnMovesAvailable(state, MANGALA)
+        const expectedExtraTurn = etCount > 0
+
+        expect(
+          expectedExtraTurn,
+          `Mangala pit=${boardPit} stones=${stones}: formula says ${expectedExtraTurn}, computeMoveDetails says ${actualExtraTurn}`,
+        ).toBe(actualExtraTurn)
+      }
+    }
+  })
+})
+
+// ── Mangala evaluation smoke test ──────────────────────────────────────
+
+describe('evaluateExpert Mangala smoke', () => {
+  it('returns finite numbers on Mangala fixtures obeying sign convention', () => {
+    const mangalaWeights = WEIGHTS_BY_GAME.mangala
+
+    const fixtures = [
+      { name: 'mid1', state: mangalaMidGameFixture1 },
+      { name: 'mid2', state: mangalaMidGameFixture2 },
+      { name: 'late', state: mangalaLateGameFixture },
+    ]
+
+    for (const { name, state } of fixtures) {
+      const evalScore = evaluateExpert(state, MANGALA_RULES, mangalaWeights)
+      expect(isFinite(evalScore), `${name}: eval must be finite, got ${evalScore}`).toBe(true)
+
+      const mirrored: GameState = {
+        ...state,
+        currentPlayer: state.currentPlayer === 'bottom' ? 'top' : 'bottom',
+      }
+      const mirroredEval = evaluateExpert(mirrored, MANGALA_RULES, mangalaWeights)
+      expect(isFinite(mirroredEval), `${name} mirrored: eval must be finite`).toBe(true)
+    }
   })
 })

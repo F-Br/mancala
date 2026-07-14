@@ -187,7 +187,8 @@ export function GameScreen() {
       cancelAnalysis()
 
       try {
-        const handle = await requestAnalysis(state, 800)
+        const game = savedMeta?.game ?? 'kalah'
+        const handle = await requestAnalysis(state, 800, undefined, game)
         analysisRef.current = handle
         const result = await handle.promise
         analysisRef.current = null
@@ -202,7 +203,7 @@ export function GameScreen() {
         analysisRef.current = null
       }
     },
-    [liveHintsEnabled, cancelAnalysis],
+    [liveHintsEnabled, cancelAnalysis, savedMeta],
   )
 
   const doBotMove = useCallback(
@@ -210,7 +211,8 @@ export function GameScreen() {
       botInFlight.current = true
       setThinking(true)
       try {
-        const handle = await requestBotMove(state, botLevel)
+        const game = savedMeta?.game ?? 'kalah'
+        const handle = await requestBotMove(state, botLevel, { game })
         botRequestRef.current = handle
         const result = await handle.promise
         botRequestRef.current = null
@@ -238,7 +240,7 @@ export function GameScreen() {
         setThinking(false)
       }
     },
-    [botLevel, makeMove, soundEnabled],
+    [botLevel, makeMove, soundEnabled, savedMeta],
   )
 
   const handlePitClick = useCallback(
@@ -411,7 +413,8 @@ export function GameScreen() {
     setOneShotHintPit(null)
 
     try {
-      const handle = await requestAnalysis(gameState, 2000)
+      const game = savedMeta?.game ?? 'kalah'
+      const handle = await requestAnalysis(gameState, 2000, undefined, game)
       analysisRef.current = handle
       const result = await handle.promise
       analysisRef.current = null
@@ -428,7 +431,7 @@ export function GameScreen() {
     } finally {
       setHintLoading(false)
     }
-  }, [gameState, boardLocked])
+  }, [gameState, boardLocked, savedMeta])
 
   const takebackAllowed = useMemo(
     () =>

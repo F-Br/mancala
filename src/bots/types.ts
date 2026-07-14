@@ -1,4 +1,4 @@
-import type { GameState } from '../engine'
+import type { GameState, GameId } from '../engine'
 
 export type BotLevel = 'beginner' | 'casual' | 'strong' | 'expert'
 
@@ -8,6 +8,7 @@ export interface BotRequest {
   level: BotLevel
   timeBudgetMs?: number
   requestId: number
+  game?: GameId
 }
 
 export interface BotCancelRequest {
@@ -43,6 +44,7 @@ export interface AnalysisRequest {
   playedPitIndex?: number
   totalExtractionBudgetMs?: number
   perStepExtractionBudgetMs?: number
+  game?: GameId
 }
 
 export interface AnalysisCancelRequest {

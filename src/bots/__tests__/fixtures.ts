@@ -1,17 +1,18 @@
 import { createInitialState, applyMove, legalMoves } from '../../engine'
-import { KALAH_STANDARD } from '../../engine'
-import type { GameState } from '../../engine'
+import { KALAH_STANDARD, MANGALA_STANDARD } from '../../engine'
+import type { GameState, RuleConfig } from '../../engine'
 
 export const RULES = KALAH_STANDARD
+export const MANGALA_RULES = MANGALA_STANDARD
 
-function applySequence(moves: number[]): GameState {
-  let state: GameState = createInitialState()
+function applySequence(moves: number[], rules: RuleConfig = RULES): GameState {
+  let state: GameState = createInitialState(rules)
   for (const pit of moves) {
-    const legal = legalMoves(state, RULES)
+    const legal = legalMoves(state, rules)
     if (!legal.includes(pit)) {
       throw new Error(`Illegal move ${pit} at board ${JSON.stringify(state.board)}, legal: [${legal.join(',')}]`)
     }
-    state = applyMove(state, pit, RULES)
+    state = applyMove(state, pit, rules)
   }
   return state
 }
@@ -50,3 +51,26 @@ export function hasExtraTurnMove(state: GameState): number {
   }
   return -1
 }
+
+// ── Mangala fixtures ──────────────────────────────────────────────────────
+
+// Mid-game position 1: 46 stones, top to move, pit 12 is extra-turn
+export const mangalaMidGameFixture1: GameState = applySequence(
+  [4, 12, 2, 7, 4, 8, 1],
+  MANGALA_RULES,
+)
+
+// Mid-game position 2: 32 stones, bottom to move, pit 0 is extra-turn
+export const mangalaMidGameFixture2: GameState = applySequence(
+  [5, 7, 4, 8, 9, 5, 2, 10, 1, 10, 3, 9, 1, 12],
+  MANGALA_RULES,
+)
+
+// Late-game position: 6 stones on board, bottom to move
+export const mangalaLateGameFixture: GameState = applySequence(
+  [
+    0, 10, 7, 0, 11, 1, 9, 10, 3, 7, 5, 8, 3, 11, 12, 1, 9, 0,
+    7, 2, 12, 10, 2, 8, 1, 7, 2, 11, 12, 7, 1, 11,
+  ],
+  MANGALA_RULES,
+)

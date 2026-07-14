@@ -1,11 +1,21 @@
 import type { Side, RuleConfig, GameState } from './types'
 import { BOTTOM_STORE, TOP_STORE } from './types'
-import { KALAH_STANDARD } from './rules'
 import { applyMove } from './moves'
 
 const PITS = 12
 
 export const NON_PROBEABLE = -128
+
+/**
+ * Tablebase decomposability property.
+ *
+ * The tablebase relies on the following property, which holds for both Kalah
+ * and Mangala: store contents never influence legal play or stone flow.
+ * Mangala sowing deposits into the mover's store but never reads it, and
+ * captures / sweep depend only on pit contents. Therefore the exact final
+ * store differential decomposes as `currentStoreDiff + TB(pits, sideToMove)`,
+ * and pit-stone totals remain non-increasing (moves bank stones or don't).
+ */
 
 export interface TbProgressMsg {
   type: 'tbProgress'
@@ -232,7 +242,7 @@ function computeTBEntry(
 
 export function generateTablebase(
   K: number,
-  rules: RuleConfig = KALAH_STANDARD,
+  rules: RuleConfig,
   postMsg?: (msg: TbProgressMsg) => void,
 ): { table: Int8Array; nonProbeableCount: number } {
   const offsets = makeOffsets(K)

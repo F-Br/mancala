@@ -1,4 +1,4 @@
-import type { GameState } from '../engine'
+import type { GameState, GameId } from '../engine'
 import type { TbProgressMsg } from '../engine'
 import type { AnalysisWorkerMessage } from './types'
 import AnalysisWorker from './analysisWorker?worker'
@@ -95,6 +95,7 @@ export async function requestAnalysis(
   state: GameState,
   timeBudgetMs: number,
   playedPitIndex?: number,
+  game?: GameId,
 ): Promise<AnalysisHandle> {
   const w = getWorker()
   const requestId = nextRequestId++
@@ -108,6 +109,7 @@ export async function requestAnalysis(
       timeBudgetMs,
       requestId,
       playedPitIndex,
+      game,
     })
   })
 

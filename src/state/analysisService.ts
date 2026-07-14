@@ -177,12 +177,12 @@ async function processQueue(): Promise<void> {
 }
 
 async function runJob(job: AnalysisJob, signal: { cancelled: boolean }): Promise<void> {
-  const { gameText, gameState, firstPlayer, rules } = job
+  const { gameText, gameState, firstPlayer, rules, game } = job
   const positions = replayPositions(gameState, firstPlayer, rules)
 
   if (positions.length <= 1) return
 
-  const analyze = createAnalyzeCallback(signal)
+  const analyze = createAnalyzeCallback(signal, game)
 
   const batchResult = await executeBatchAnalysis({
     positions,
@@ -230,7 +230,7 @@ async function runJob(job: AnalysisJob, signal: { cancelled: boolean }): Promise
   }
 }
 
-function createAnalyzeCallback(signal: { cancelled: boolean }) {
+function createAnalyzeCallback(signal: { cancelled: boolean }, game: GameId) {
   return async (state: GameState, budgetMs: number, playedPitIndex?: number): Promise<AnalysisResult> => {
     while (useGameStore.getState().gameState?.status === 'in-progress') {
       if (signal.cancelled) throw new Error('Analysis cancelled')
@@ -241,7 +241,7 @@ function createAnalyzeCallback(signal: { cancelled: boolean }) {
       return _analyzeFn(state, budgetMs, playedPitIndex)
     }
 
-    const handle = await requestAnalysis(state, budgetMs, playedPitIndex)
+    const handle = await requestAnalysis(state, budgetMs, playedPitIndex, game)
     activeHandle = handle
     const result = await handle.promise
     activeHandle = null

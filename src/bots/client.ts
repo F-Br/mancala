@@ -1,4 +1,4 @@
-import type { GameState } from '../engine'
+import type { GameState, GameId } from '../engine'
 import type { BotLevel } from './types'
 import type { BotWorkerMessage } from './types'
 import BotWorker from './worker?worker'
@@ -68,7 +68,7 @@ function getWorker(): Worker {
 export async function requestBotMove(
   state: GameState,
   level: BotLevel,
-  opts?: { timeBudgetMs?: number },
+  opts?: { timeBudgetMs?: number; game?: GameId },
 ): Promise<BotMoveHandle> {
   const w = getWorker()
   const requestId = nextRequestId++
@@ -82,6 +82,7 @@ export async function requestBotMove(
       level,
       timeBudgetMs: opts?.timeBudgetMs,
       requestId,
+      game: opts?.game,
     })
   })
 

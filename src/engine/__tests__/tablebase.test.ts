@@ -174,7 +174,7 @@ describe('encodeProven', () => {
 
 describe('tablebase generation correctness', () => {
   it('K=0: empty board, both sides TB=0 (no stones → sweep = 0)', () => {
-    const { table, nonProbeableCount } = generateTablebase(0)
+    const { table, nonProbeableCount } = generateTablebase(0, KALAH_STANDARD)
     expect(table).toHaveLength(2)
     expect(nonProbeableCount).toBe(0)
     expect(table[0]).toBe(0)
@@ -182,7 +182,7 @@ describe('tablebase generation correctness', () => {
   })
 
   it('K=1: values within [-1, 1], no non-probeable entries', () => {
-    const { table, nonProbeableCount } = generateTablebase(1)
+    const { table, nonProbeableCount } = generateTablebase(1, KALAH_STANDARD)
     expect(nonProbeableCount).toBe(0)
     for (let i = 0; i < table.length; i++) {
       expect(table[i]).toBeGreaterThanOrEqual(-1)
@@ -191,7 +191,7 @@ describe('tablebase generation correctness', () => {
   })
 
   it('K=3: all entries within [-3, 3], no non-probeable entries', () => {
-    const { table, nonProbeableCount } = generateTablebase(3)
+    const { table, nonProbeableCount } = generateTablebase(3, KALAH_STANDARD)
     expect(nonProbeableCount).toBe(0)
     for (let i = 0; i < table.length; i++) {
       expect(table[i]).toBeGreaterThanOrEqual(-3)
@@ -200,7 +200,7 @@ describe('tablebase generation correctness', () => {
   })
 
   it('K=6: all entries within [-6, 6], no non-probeable entries', () => {
-    const { table, nonProbeableCount } = generateTablebase(6)
+    const { table, nonProbeableCount } = generateTablebase(6, KALAH_STANDARD)
     expect(nonProbeableCount).toBe(0)
     for (let i = 0; i < table.length; i++) {
       expect(table[i]).toBeGreaterThanOrEqual(-6)
@@ -248,7 +248,7 @@ describe('tablebase cross-validation against full search (K=4)', () => {
 
   it('TB values match full minimax to terminal for reachable positions', () => {
     const K = 4
-    const { table, nonProbeableCount } = generateTablebase(K)
+    const { table, nonProbeableCount } = generateTablebase(K, KALAH_STANDARD)
     expect(nonProbeableCount).toBe(0)
 
     const offsets = getOffsets(K)

@@ -1,5 +1,4 @@
 import type { GameState, RuleConfig, Side } from '../engine'
-import { BOTTOM_STORE, TOP_STORE, BOARD_LENGTH } from '../engine'
 import { legalMoves, applyMove, cloneState } from '../engine'
 import type { EvaluationFn } from './evaluation'
 import { evaluateSimple, evaluateStrong, evaluateExpert, WIN_SCORE, MAX_PLY } from './evaluation'
@@ -166,21 +165,16 @@ function orderMoves(
       score += 5000 + prevRootScores[pit]! * 0.5
     }
 
-    const ownStore = state.currentPlayer === 'bottom' ? BOTTOM_STORE : TOP_STORE
-    const distToStore = (ownStore - pit + BOARD_LENGTH) % BOARD_LENGTH || BOARD_LENGTH
-    const stonesInPit = state.board[pit] ?? 0
-    if (stonesInPit === distToStore) score += 50
-
     const child = applyMove(state, pit, rules)
     const childMove = child.moveHistory[child.moveHistory.length - 1]
+    if (childMove?.wasExtraTurn) score += 50
+
     if (childMove?.captured) score += 100
 
     if (killers) {
       if (pit === killers[0]) score += 75
       else if (pit === killers[1]) score += 75
     }
-
-    if (childMove?.wasExtraTurn && stonesInPit !== distToStore) score += 25
 
     if (historyTable) {
       const sideIdx = state.currentPlayer === 'bottom' ? 0 : 1
