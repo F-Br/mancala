@@ -1,5 +1,6 @@
-import type { GameState, Move, GameStatus, Side } from './types'
-import { KALAH_STANDARD } from './rules'
+import type { GameState, Move, GameStatus, Side, RuleConfig } from './types'
+import type { GameId } from './rules'
+import { KALAH_STANDARD, getRulesForGame } from './rules'
 import { createInitialState } from './state'
 import { legalMoves, applyMove } from './moves'
 
@@ -23,7 +24,7 @@ export function moveToNotation(move: Move): string {
   return letter + suffix
 }
 
-export function notationToMove(state: GameState, str: string): Move | null {
+export function notationToMove(state: GameState, str: string, rules?: RuleConfig): Move | null {
   const match = str.match(/^([a-fA-F])([x*]*)$/)
   if (!match) return null
 
@@ -37,21 +38,22 @@ export function notationToMove(state: GameState, str: string): Move | null {
     pitIndex = letter.charCodeAt(0) - 'a'.charCodeAt(0)
   }
 
-  if (!legalMoves(state).includes(pitIndex)) return null
+  const effectiveRules = rules ?? KALAH_STANDARD
+  if (!legalMoves(state, effectiveRules).includes(pitIndex)) return null
 
-  const newState = applyMove(state, pitIndex)
+  const newState = applyMove(state, pitIndex, effectiveRules)
   const move = newState.moveHistory[newState.moveHistory.length - 1]
   return move ?? null
 }
 
-function encodeHeader(state: GameState): string {
+function encodeHeader(state: GameState, game: GameId): string {
   const boardStr = state.board.join(',')
   const playerChar = state.currentPlayer === 'bottom' ? 'b' : 't'
   const statusChar = state.status === 'finished' ? 'f' : 'i'
   const winnerRaw = state.winner
   const winnerChar =
     winnerRaw === null ? 'n' : winnerRaw === 'bottom' ? 'b' : winnerRaw === 'top' ? 't' : 'd'
-  return `[${boardStr}|${playerChar}|${statusChar}|${winnerChar}]`
+  return `[${game}|${boardStr}|${playerChar}|${statusChar}|${winnerChar}]`
 }
 
 function decodeHeader(inner: string): GameState {
@@ -72,18 +74,19 @@ function decodeHeader(inner: string): GameState {
   }
 }
 
-export function gameToText(state: GameState): string {
+export function gameToText(state: GameState, game: GameId): string {
+  const rules = getRulesForGame(game)
   // Try to replay from standard initial state.
-  const initial = createInitialState(KALAH_STANDARD, 'bottom')
+  const initial = createInitialState(rules, 'bottom')
   let replayed = initial
   let canReplayFromStandard = true
 
   for (const move of state.moveHistory) {
-    if (!legalMoves(replayed).includes(move.pitIndex)) {
+    if (!legalMoves(replayed, rules).includes(move.pitIndex)) {
       canReplayFromStandard = false
       break
     }
-    replayed = applyMove(replayed, move.pitIndex)
+    replayed = applyMove(replayed, move.pitIndex, rules)
   }
 
   // Verify the replay arrived at the same state
@@ -102,37 +105,53 @@ export function gameToText(state: GameState): string {
 
   const lines: string[] = []
   if (canReplayFromStandard && state.moveHistory.length > 0) {
-    lines.push(encodeHeader(initial))
+    lines.push(encodeHeader(initial, game))
     for (const move of state.moveHistory) {
       lines.push(moveToNotation(move))
     }
   } else {
     // Custom board or empty move history — encode current state directly
-    lines.push(encodeHeader(state))
+    lines.push(encodeHeader(state, game))
   }
   return lines.join('\n')
 }
 
-export function parseGameText(str: string): GameState {
+export function parseGameText(str: string): { state: GameState; game: GameId } {
   const lines = str
     .trim()
     .split('\n')
     .filter((l) => l.length > 0)
-  if (lines.length === 0) return createInitialState(KALAH_STANDARD, 'bottom')
+  if (lines.length === 0) return { state: createInitialState(KALAH_STANDARD, 'bottom'), game: 'kalah' }
 
   const headerLine = lines[0]!
 
   const headerMatch = headerLine.match(/^\[([^\]]+)\]$/)
-  if (!headerMatch) return createInitialState(KALAH_STANDARD, 'bottom')
+  if (!headerMatch) return { state: createInitialState(KALAH_STANDARD, 'bottom'), game: 'kalah' }
 
-  let state = decodeHeader(headerMatch[1]!)
+  const inner = headerMatch[1]!
+  const parts = inner.split('|')
+
+  let game: GameId
+  let state: GameState
+
+  if (parts.length >= 5) {
+    // New format: [game|board|player|status|winner]
+    game = parts[0] as GameId
+    state = decodeHeader(parts.slice(1).join('|'))
+  } else {
+    // Legacy 4-part format: [board|player|status|winner]
+    game = 'kalah'
+    state = decodeHeader(inner)
+  }
+
+  const rules = getRulesForGame(game)
 
   // Replay moves from the header's initial state
   for (let i = 1; i < lines.length; i++) {
-    const move = notationToMove(state, lines[i]!)
+    const move = notationToMove(state, lines[i]!, rules)
     if (!move) break
-    state = applyMove(state, move.pitIndex)
+    state = applyMove(state, move.pitIndex, rules)
   }
 
-  return state
+  return { state, game }
 }

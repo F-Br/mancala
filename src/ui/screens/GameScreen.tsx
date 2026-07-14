@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { legalMoves, gameToText } from '../../engine'
-import type { GameState as EngineGameState, Move, Side } from '../../engine'
+import type { GameState as EngineGameState, Move, Side, GameId } from '../../engine'
 import { requestBotMove, terminateBotWorker } from '../../bots/client'
 import type { BotMoveHandle } from '../../bots/client'
 import { requestAnalysis } from '../../bots/analysisClient'
@@ -314,6 +314,8 @@ export function GameScreen() {
         ? `${strings.game.bot}${meta.botLevel ? ' (' + meta.botLevel + ')' : ''}`
         : strings.game.player2
 
+    const game = (meta as { game?: GameId }).game ?? 'kalah'
+
     const record: GameRecord = {
       id: crypto.randomUUID(),
       mode: meta.mode,
@@ -322,7 +324,8 @@ export function GameScreen() {
       opponentLabel,
       result,
       finalScore: { player: playerScore, opponent: opponentScore },
-      gameText: gameToText(gs),
+      gameText: gameToText(gs, game),
+      game,
       dateISO: new Date().toISOString(),
     }
 
@@ -332,7 +335,7 @@ export function GameScreen() {
     if (useSettingsStore.getState().autoAnalyzeEnabled) {
       const { firstPlayer, rules } = useGameStore.getState()
       useAnalysisService.getState().requestAnalysis(
-        { gameText: record.gameText, gameState: gs, firstPlayer, rules },
+        { gameText: record.gameText, gameState: gs, firstPlayer, rules, game },
         { foreground: false },
       )
     }
@@ -368,9 +371,10 @@ export function GameScreen() {
     setBoardLocked(false)
     setPendingMove(null)
     setPrevBoard(null)
+    const selectedGame = useSettingsStore.getState().selectedGame
     const resolved = resolveSidePreference(playerSide)
-    reset('bottom')
-    if (mode) setSavedMeta({ mode, botLevel, playerSide: resolved })
+    reset('bottom', selectedGame)
+    if (mode) setSavedMeta({ mode, botLevel, playerSide: resolved, game: selectedGame })
   }, [cancelBot, cancelAnalysis, reset, mode, botLevel, playerSide, setSavedMeta])
 
   const handleHome = useCallback(() => {
@@ -390,7 +394,8 @@ export function GameScreen() {
   const handleShare = useCallback(async () => {
     const gs = useGameStore.getState().gameState
     if (!gs) return
-    const text = gameToText(gs)
+    const game = useGameStore.getState().savedMeta?.game ?? 'kalah'
+    const text = gameToText(gs, game)
     try {
       await shareGame(text, 'mancala game')
       setShareStatus(strings.game.shareCopied)
@@ -452,9 +457,10 @@ export function GameScreen() {
       useModeStore.getState().setMode(gs.savedMeta.mode)
       useModeStore.getState().setBotLevel(gs.savedMeta.botLevel)
     } else if (!gs.gameState && mode) {
+      const selectedGame = useSettingsStore.getState().selectedGame
       const resolved = resolveSidePreference(playerSide)
-      reset('bottom')
-      setSavedMeta({ mode, botLevel, playerSide: resolved })
+      reset('bottom', selectedGame)
+      setSavedMeta({ mode, botLevel, playerSide: resolved, game: selectedGame })
     }
   }, [mode, botLevel, playerSide, reset, setSavedMeta])
 

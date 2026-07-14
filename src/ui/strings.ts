@@ -121,6 +121,8 @@ export const strings = {
     filterAll: 'All',
     filterBot: 'Bot',
     filterLocal: 'Local',
+    filterKalah: 'Kalah',
+    filterMangala: 'Mangala',
     noMatchFilter: 'No games match the selected filters.',
     playFirstGame: 'Play your first game',
     totalGames: 'Total Games',
@@ -131,6 +133,10 @@ export const strings = {
     accuracy: 'Accuracy',
     analyzing: 'Analyzing\u2026',
     analysisQueued: 'Analysis queued',
+  },
+  gameNames: {
+    kalah: 'Kalah',
+    mangala: 'Mangala',
   },
   stats: {
     title: 'Statistics',

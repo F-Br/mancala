@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { BotLevel } from '../bots/types'
-import type { Side } from '../engine'
+import type { Side, GameId } from '../engine'
 import type { AnalysisCacheEntry } from './gameStore'
 
 export interface GameRecord {
@@ -13,6 +13,7 @@ export interface GameRecord {
   result: 'win' | 'loss' | 'draw'
   finalScore: { player: number; opponent: number }
   gameText: string
+  game?: GameId
   analysisResult?: AnalysisCacheEntry[] | null
   dateISO: string
 }

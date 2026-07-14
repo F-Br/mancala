@@ -46,9 +46,9 @@ function SharedGameHandler({ children }: { children: React.ReactNode }) {
         return
       }
 
-      const state = parseGameText(gameText)
+      const parsed = parseGameText(gameText)
       useGameStore.getState().clear()
-      useGameStore.setState({ gameState: state, savedMeta: null })
+      useGameStore.setState({ gameState: parsed.state, savedMeta: null })
       useSettingsStore.getState().setTutorialSeen(true)
       navigate('/analysis', { replace: true, state: { shared: true } })
     } catch {

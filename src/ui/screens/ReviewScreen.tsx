@@ -97,8 +97,9 @@ export function ReviewScreen() {
 
   const gameText = useMemo(() => {
     if (!gameState) return null
-    return gameToText(gameState)
-  }, [gameState])
+    const game = savedMeta?.game ?? 'kalah'
+    return gameToText(gameState, game)
+  }, [gameState, savedMeta?.game])
 
   const cache = analysisCache
 
@@ -122,11 +123,12 @@ export function ReviewScreen() {
   useEffect(() => {
     if (!gameState || !gameText) return
     if (cache && isCacheHealthy(cache)) return
+    const game = savedMeta?.game ?? 'kalah'
     serviceRequestAnalysis(
-      { gameText, gameState, firstPlayer, rules },
+      { gameText, gameState, firstPlayer, rules, game },
       { foreground: true },
     )
-  }, [gameText, gameState, firstPlayer, rules, cache, serviceRequestAnalysis])
+  }, [gameText, gameState, firstPlayer, rules, savedMeta?.game, cache, serviceRequestAnalysis])
 
   useEffect(() => {
     return () => {
@@ -335,7 +337,8 @@ export function ReviewScreen() {
   const handleShare = useCallback(async () => {
     if (!gameState) return
     const gs = gameState
-    const text = gameToText(gs)
+    const game = savedMeta?.game ?? 'kalah'
+    const text = gameToText(gs, game)
     try {
       await shareGame(text, 'mancala game replay')
       setShareStatus(strings.game.shareCopied)
@@ -343,7 +346,7 @@ export function ReviewScreen() {
       setShareStatus(strings.game.shareFailed)
     }
     setTimeout(() => setShareStatus(null), 3000)
-  }, [gameState])
+  }, [gameState, savedMeta?.game])
 
   const graphPoints = useMemo((): EvalGraphPoint[] => {
     if (!cache) return []

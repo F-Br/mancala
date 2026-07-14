@@ -76,7 +76,7 @@ describe('analysisService', () => {
 
   it('two requestAnalysis calls with same gameText while first runs → one execution', async () => {
     const { gameState, firstPlayer } = buildGameWithMoves([2, 8, 1, 9])
-    const gameText = gameToText(gameState)
+    const gameText = gameToText(gameState, 'kalah')
 
     let analyzeCalls = 0
     _setAnalyzeFn(async () => {
@@ -86,10 +86,10 @@ describe('analysisService', () => {
     })
 
     const svc = useAnalysisService.getState()
-    svc.requestAnalysis({ gameText, gameState, firstPlayer, rules: KALAH_STANDARD })
+    svc.requestAnalysis({ game: 'kalah', gameText, gameState, firstPlayer, rules: KALAH_STANDARD })
 
     await new Promise((r) => setTimeout(r, 2))
-    svc.requestAnalysis({ gameText, gameState, firstPlayer, rules: KALAH_STANDARD })
+    svc.requestAnalysis({ game: 'kalah', gameText, gameState, firstPlayer, rules: KALAH_STANDARD })
 
     const moveCount = gameState.moveHistory.length
 
@@ -110,7 +110,7 @@ describe('analysisService', () => {
 
   it('history record with healthy analysisResult → no execution', async () => {
     const { gameState, firstPlayer } = buildGameWithMoves([2, 8, 1])
-    const gameText = gameToText(gameState)
+    const gameText = gameToText(gameState, 'kalah')
 
     useHistoryStore.getState().addRecord({
       id: 'test-skip',
@@ -131,6 +131,7 @@ describe('analysisService', () => {
     })
 
     useAnalysisService.getState().requestAnalysis({
+      game: 'kalah',
       gameText,
       gameState,
       firstPlayer,
@@ -147,7 +148,7 @@ describe('analysisService', () => {
 
   it('on completion: updateAnalysisInHistory receives entries', async () => {
     const { gameState, firstPlayer } = buildGameWithMoves([2, 8, 1])
-    const gameText = gameToText(gameState)
+    const gameText = gameToText(gameState, 'kalah')
 
     useHistoryStore.getState().addRecord({
       id: 'test-complete',
@@ -163,6 +164,7 @@ describe('analysisService', () => {
     _setAnalyzeFn(async () => makeFakeResult({ pitIndex: 5 }))
 
     useAnalysisService.getState().requestAnalysis({
+      game: 'kalah',
       gameText,
       gameState,
       firstPlayer,
@@ -185,7 +187,7 @@ describe('analysisService', () => {
 
   it('setAnalysisCache NOT called when store-loaded game does not match', async () => {
     const job = buildGameWithMoves([2, 8])
-    const jobText = gameToText(job.gameState)
+    const jobText = gameToText(job.gameState, 'kalah')
 
     useHistoryStore.getState().addRecord({
       id: 'cache-nomatch',
@@ -203,6 +205,7 @@ describe('analysisService', () => {
     useGameStore.setState({ gameState: null, analysisCache: null })
 
     useAnalysisService.getState().requestAnalysis({
+      game: 'kalah',
       gameText: jobText,
       gameState: job.gameState,
       firstPlayer: job.firstPlayer,
@@ -238,7 +241,7 @@ describe('analysisService', () => {
     }
     expect(state.status).toBe('finished')
 
-    const jobText = gameToText(state)
+    const jobText = gameToText(state, 'kalah')
 
     useHistoryStore.getState().addRecord({
       id: 'cache-match-finished',
@@ -260,6 +263,7 @@ describe('analysisService', () => {
     expect(useGameStore.getState().analysisCache).toBeNull()
 
     useAnalysisService.getState().requestAnalysis({
+      game: 'kalah',
       gameText: jobText,
       gameState: state,
       firstPlayer: 'bottom' as Side,
@@ -281,10 +285,10 @@ describe('analysisService', () => {
 
   it('job Y running, foreground request for X → Y cancelled, X completes and persists, then Y re-runs', async () => {
     const yGame = buildGameWithMoves([2, 8, 1, 9, 4]) // 5 moves
-    const yText = gameToText(yGame.gameState)
+    const yText = gameToText(yGame.gameState, 'kalah')
 
     const xGame = buildGameWithMoves([3]) // 1 move
-    const xText = gameToText(xGame.gameState)
+    const xText = gameToText(xGame.gameState, 'kalah')
 
     useHistoryStore.getState().addRecord({
       id: 'preempt-y',
@@ -320,6 +324,7 @@ describe('analysisService', () => {
 
     // Start Y (non-foreground)
     useAnalysisService.getState().requestAnalysis({
+      game: 'kalah',
       gameText: yText,
       gameState: yGame.gameState,
       firstPlayer: yGame.firstPlayer,
@@ -332,6 +337,7 @@ describe('analysisService', () => {
     // Preempt with X (foreground)
     useAnalysisService.getState().requestAnalysis(
       {
+        game: 'kalah',
         gameText: xText,
         gameState: xGame.gameState,
         firstPlayer: xGame.firstPlayer,
@@ -377,7 +383,7 @@ describe('analysisService', () => {
 
   it('pauses analysis when gameStore has in-progress state, resumes when finished', async () => {
     const { gameState, firstPlayer } = buildGameWithMoves([2, 8, 1])
-    const gameText = gameToText(gameState)
+    const gameText = gameToText(gameState, 'kalah')
     const moveCount = gameState.moveHistory.length
 
     // Set the game store to an in-progress state
@@ -401,6 +407,7 @@ describe('analysisService', () => {
     })
 
     useAnalysisService.getState().requestAnalysis({
+      game: 'kalah',
       gameText,
       gameState,
       firstPlayer,
@@ -435,7 +442,7 @@ describe('analysisService', () => {
 
   it('analysis completes and persists without any component involvement', async () => {
     const { gameState, firstPlayer } = buildGameWithMoves([2, 8, 1, 9])
-    const gameText = gameToText(gameState)
+    const gameText = gameToText(gameState, 'kalah')
 
     useHistoryStore.getState().addRecord({
       id: 'survival',
@@ -451,6 +458,7 @@ describe('analysisService', () => {
     _setAnalyzeFn(async () => makeFakeResult({ pitIndex: 7 }))
 
     useAnalysisService.getState().requestAnalysis({
+      game: 'kalah',
       gameText,
       gameState,
       firstPlayer,
@@ -474,7 +482,7 @@ describe('analysisService', () => {
 
   it('cancelAll stops running job and clears queue', async () => {
     const { gameState, firstPlayer } = buildGameWithMoves([2, 8, 1, 9, 4])
-    const gameText = gameToText(gameState)
+    const gameText = gameToText(gameState, 'kalah')
 
     let analyzeCalls = 0
     _setAnalyzeFn(async () => {
@@ -484,6 +492,7 @@ describe('analysisService', () => {
     })
 
     useAnalysisService.getState().requestAnalysis({
+      game: 'kalah',
       gameText,
       gameState,
       firstPlayer,
@@ -507,8 +516,8 @@ describe('analysisService', () => {
     const game1 = buildGameWithMoves([2])
     const game2 = buildGameWithMoves([3])
 
-    const text1 = gameToText(game1.gameState)
-    const text2 = gameToText(game2.gameState)
+    const text1 = gameToText(game1.gameState, 'kalah')
+    const text2 = gameToText(game2.gameState, 'kalah')
 
     useHistoryStore.getState().addRecord({
       id: 'seq-1',
@@ -539,12 +548,14 @@ describe('analysisService', () => {
     })
 
     useAnalysisService.getState().requestAnalysis({
+      game: 'kalah',
       gameText: text1,
       gameState: game1.gameState,
       firstPlayer: game1.firstPlayer,
       rules: KALAH_STANDARD,
     })
     useAnalysisService.getState().requestAnalysis({
+      game: 'kalah',
       gameText: text2,
       gameState: game2.gameState,
       firstPlayer: game2.firstPlayer,
@@ -572,7 +583,7 @@ describe('analysisService', () => {
 
   it('background request (foreground: false) runs and persists results', async () => {
     const { gameState, firstPlayer } = buildGameWithMoves([2, 8, 1, 9])
-    const gameText = gameToText(gameState)
+    const gameText = gameToText(gameState, 'kalah')
 
     useHistoryStore.getState().addRecord({
       id: 'bg-trigger',
@@ -588,7 +599,7 @@ describe('analysisService', () => {
     _setAnalyzeFn(async () => makeFakeResult({ pitIndex: 3 }))
 
     useAnalysisService.getState().requestAnalysis(
-      { gameText, gameState, firstPlayer, rules: KALAH_STANDARD },
+      { game: 'kalah', gameText, gameState, firstPlayer, rules: KALAH_STANDARD },
       { foreground: false },
     )
 
@@ -608,7 +619,7 @@ describe('analysisService', () => {
 
   it('foreground request for same gameText while background runs → idempotent attach, no second execution', async () => {
     const { gameState, firstPlayer } = buildGameWithMoves([2, 8, 1, 9])
-    const gameText = gameToText(gameState)
+    const gameText = gameToText(gameState, 'kalah')
     const moveCount = gameState.moveHistory.length
 
     useHistoryStore.getState().addRecord({
@@ -631,7 +642,7 @@ describe('analysisService', () => {
 
     // Start background job
     useAnalysisService.getState().requestAnalysis(
-      { gameText, gameState, firstPlayer, rules: KALAH_STANDARD },
+      { game: 'kalah', gameText, gameState, firstPlayer, rules: KALAH_STANDARD },
       { foreground: false },
     )
 
@@ -639,7 +650,7 @@ describe('analysisService', () => {
 
     // Simulate Review Screen foreground request for same game
     useAnalysisService.getState().requestAnalysis(
-      { gameText, gameState, firstPlayer, rules: KALAH_STANDARD },
+      { game: 'kalah', gameText, gameState, firstPlayer, rules: KALAH_STANDARD },
       { foreground: true },
     )
 
@@ -658,10 +669,10 @@ describe('analysisService', () => {
 
   it('background trigger fires while foreground for different game runs → queues, does not preempt', async () => {
     const fgGame = buildGameWithMoves([2, 8, 1, 9, 4])
-    const fgText = gameToText(fgGame.gameState)
+    const fgText = gameToText(fgGame.gameState, 'kalah')
 
     const bgGame = buildGameWithMoves([3])
-    const bgText = gameToText(bgGame.gameState)
+    const bgText = gameToText(bgGame.gameState, 'kalah')
 
     useHistoryStore.getState().addRecord({
       id: 'prio-fg',
@@ -700,7 +711,7 @@ describe('analysisService', () => {
 
     // Start foreground job
     useAnalysisService.getState().requestAnalysis(
-      { gameText: fgText, gameState: fgGame.gameState, firstPlayer: fgGame.firstPlayer, rules: KALAH_STANDARD },
+      { game: 'kalah', gameText: fgText, gameState: fgGame.gameState, firstPlayer: fgGame.firstPlayer, rules: KALAH_STANDARD },
       { foreground: true },
     )
 
@@ -709,7 +720,7 @@ describe('analysisService', () => {
 
     // Background job queued while foreground runs
     useAnalysisService.getState().requestAnalysis(
-      { gameText: bgText, gameState: bgGame.gameState, firstPlayer: bgGame.firstPlayer, rules: KALAH_STANDARD },
+      { game: 'kalah', gameText: bgText, gameState: bgGame.gameState, firstPlayer: bgGame.firstPlayer, rules: KALAH_STANDARD },
       { foreground: false },
     )
 

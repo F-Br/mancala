@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ThemeKey } from '../ui/theme'
 import { defaultThemeKey } from '../ui/theme'
+import type { GameId } from '../engine'
 
 export interface SettingsState {
   theme: ThemeKey
@@ -12,6 +13,7 @@ export interface SettingsState {
   autoAnalyzeEnabled: boolean
   tutorialSeen: boolean
   showPitCounts: boolean
+  selectedGame: GameId
   setTheme: (key: ThemeKey) => void
   setSoundEnabled: (v: boolean) => void
   setHapticsEnabled: (v: boolean) => void
@@ -20,6 +22,7 @@ export interface SettingsState {
   setAutoAnalyzeEnabled: (v: boolean) => void
   setTutorialSeen: (v: boolean) => void
   setShowPitCounts: (v: boolean) => void
+  setSelectedGame: (game: GameId) => void
   resetAll: () => void
 }
 
@@ -32,6 +35,7 @@ const defaults = {
   autoAnalyzeEnabled: true,
   tutorialSeen: false,
   showPitCounts: false,
+  selectedGame: 'kalah' as GameId,
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -46,6 +50,7 @@ export const useSettingsStore = create<SettingsState>()(
       setAutoAnalyzeEnabled: (autoAnalyzeEnabled) => set({ autoAnalyzeEnabled }),
       setTutorialSeen: (tutorialSeen) => set({ tutorialSeen }),
       setShowPitCounts: (showPitCounts) => set({ showPitCounts }),
+      setSelectedGame: (selectedGame) => set({ selectedGame }),
       resetAll: () => set(defaults),
     }),
     {
@@ -54,6 +59,7 @@ export const useSettingsStore = create<SettingsState>()(
         const allowed: (keyof SettingsState)[] = [
           'theme', 'soundEnabled', 'hapticsEnabled', 'animationSpeed',
           'liveHintsEnabled', 'autoAnalyzeEnabled', 'tutorialSeen', 'showPitCounts',
+          'selectedGame',
         ]
         const result: Record<string, unknown> = {}
         for (const key of allowed) {

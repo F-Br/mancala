@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { GameState, RuleConfig, Side, TbProgressMsg } from '../engine'
+import type { GameState, RuleConfig, Side, TbProgressMsg, GameId } from '../engine'
 import { gameToText } from '../engine'
 import { requestAnalysis, setOnTBProgress } from '../bots/analysisClient'
 import type { AnalysisHandle, AnalysisResult } from '../bots/analysisClient'
@@ -19,6 +19,7 @@ export interface AnalysisJob {
   gameState: GameState
   firstPlayer: Side
   rules: RuleConfig
+  game: GameId
 }
 
 export interface ProgressInfo {
@@ -221,8 +222,11 @@ async function runJob(job: AnalysisJob, signal: { cancelled: boolean }): Promise
   jobMap.delete(gameText)
 
   const currentStoreGame = useGameStore.getState()
-  if (currentStoreGame.gameState && gameToText(currentStoreGame.gameState) === gameText) {
-    useGameStore.getState().setAnalysisCache(entries)
+  if (currentStoreGame.gameState) {
+    const storeGame = currentStoreGame.savedMeta?.game ?? 'kalah'
+    if (gameToText(currentStoreGame.gameState, storeGame) === gameText) {
+      useGameStore.getState().setAnalysisCache(entries)
+    }
   }
 }
 

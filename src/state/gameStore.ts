@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { GameState, RuleConfig, Side } from '../engine'
-import { createInitialState, applyMove } from '../engine'
+import type { GameState, RuleConfig, Side, GameId } from '../engine'
+import { createInitialState, applyMove, getRulesForGame } from '../engine'
 import { KALAH_STANDARD } from '../engine'
 import type { BotLevel } from '../bots/types'
 import type { GameMode } from './modeStore'
@@ -20,6 +20,7 @@ export interface SavedMeta {
   mode: GameMode
   botLevel: BotLevel
   playerSide: Side
+  game?: GameId
 }
 
 export interface GameStore {
@@ -29,7 +30,7 @@ export interface GameStore {
   savedMeta: SavedMeta | null
   analysisCache: AnalysisCacheEntry[] | null
   makeMove: (pitIndex: number) => void
-  reset: (firstPlayer?: Side) => void
+  reset: (firstPlayer?: Side, gameId?: GameId) => void
   takeback: () => void
   clear: () => void
   setSavedMeta: (meta: SavedMeta) => void
@@ -50,11 +51,11 @@ export const useGameStore = create<GameStore>()(
         const newState = applyMove(gameState, pitIndex, rules)
         set({ gameState: newState, analysisCache: null })
       },
-      reset: (firstPlayer?: Side) => {
-        const rules = get().rules
+      reset: (firstPlayer?: Side, gameId?: GameId) => {
+        const rules = gameId ? getRulesForGame(gameId) : get().rules
         const fp = firstPlayer ?? 'bottom'
         const state = createInitialState(rules, fp)
-        set({ gameState: state, firstPlayer: fp, analysisCache: null })
+        set({ gameState: state, firstPlayer: fp, analysisCache: null, rules })
       },
       takeback: () => {
         const { gameState, rules, firstPlayer } = get()
@@ -73,16 +74,23 @@ export const useGameStore = create<GameStore>()(
     {
       name: 'mancala-current-game',
       version: 1,
-      merge: (persisted, current) => ({
-        ...current,
-        ...(typeof persisted === 'object' && persisted
+      merge: (persisted, current) => {
+        const persistedObj = typeof persisted === 'object' && persisted
           ? Object.fromEntries(
               Object.entries(persisted as Record<string, unknown>).filter(
                 ([key]) => key in current,
               ),
             )
-          : {}),
-      }),
+          : {}
+        const merged = {
+          ...current,
+          ...persistedObj,
+        }
+        if (merged.savedMeta && (merged.savedMeta as SavedMeta).game) {
+          merged.rules = getRulesForGame((merged.savedMeta as SavedMeta).game!)
+        }
+        return merged
+      },
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('Failed to load game state from localStorage:', error)
       },

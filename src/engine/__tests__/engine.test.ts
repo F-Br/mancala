@@ -788,13 +788,14 @@ describe('notation', () => {
 
   it('gameToText / parseGameText round-trip for simple game', () => {
     const state = createInitialState()
-    const text = gameToText(state)
+    const text = gameToText(state, 'kalah')
     const parsed = parseGameText(text)
 
-    expect(parsed.board).toEqual(state.board)
-    expect(parsed.currentPlayer).toBe(state.currentPlayer)
-    expect(parsed.status).toBe(state.status)
-    expect(parsed.winner).toBe(state.winner)
+    expect(parsed.state.board).toEqual(state.board)
+    expect(parsed.state.currentPlayer).toBe(state.currentPlayer)
+    expect(parsed.state.status).toBe(state.status)
+    expect(parsed.state.winner).toBe(state.winner)
+    expect(parsed.game).toBe('kalah')
   })
 
   it('gameToText / parseGameText round-trip after several moves', () => {
@@ -803,14 +804,15 @@ describe('notation', () => {
     state = applyMove(state, 7)
     state = applyMove(state, 5)
 
-    const text = gameToText(state)
+    const text = gameToText(state, 'kalah')
     const parsed = parseGameText(text)
 
-    expect(parsed.board).toEqual(state.board)
-    expect(parsed.currentPlayer).toBe(state.currentPlayer)
-    expect(parsed.status).toBe(state.status)
-    expect(parsed.winner).toBe(state.winner)
-    expect(parsed.moveHistory).toHaveLength(state.moveHistory.length)
+    expect(parsed.state.board).toEqual(state.board)
+    expect(parsed.state.currentPlayer).toBe(state.currentPlayer)
+    expect(parsed.state.status).toBe(state.status)
+    expect(parsed.state.winner).toBe(state.winner)
+    expect(parsed.state.moveHistory).toHaveLength(state.moveHistory.length)
+    expect(parsed.game).toBe('kalah')
   })
 
   it('gameToText / parseGameText round-trip with extra turn', () => {
@@ -818,12 +820,13 @@ describe('notation', () => {
     state = applyMove(state, 2) // extra turn, c*
     state = applyMove(state, 3) // still bottom
 
-    const text = gameToText(state)
+    const text = gameToText(state, 'kalah')
     const parsed = parseGameText(text)
 
-    expect(parsed.board).toEqual(state.board)
-    expect(parsed.currentPlayer).toBe(state.currentPlayer)
-    expect(parsed.moveHistory).toHaveLength(state.moveHistory.length)
+    expect(parsed.state.board).toEqual(state.board)
+    expect(parsed.state.currentPlayer).toBe(state.currentPlayer)
+    expect(parsed.state.moveHistory).toHaveLength(state.moveHistory.length)
+    expect(parsed.game).toBe('kalah')
   })
 
   it('gameToText / parseGameText round-trip preserves board for custom capture state', () => {
@@ -842,13 +845,13 @@ describe('notation', () => {
     let state = makeState({ board, currentPlayer: 'bottom' })
     state = applyMove(state, 0) // capture
 
-    const text = gameToText(state)
+    const text = gameToText(state, 'kalah')
     const parsed = parseGameText(text)
 
-    expect(parsed.board).toEqual(state.board)
-    expect(parsed.currentPlayer).toBe(state.currentPlayer)
-    expect(parsed.status).toBe(state.status)
-    expect(parsed.winner).toBe(state.winner)
+    expect(parsed.state.board).toEqual(state.board)
+    expect(parsed.state.currentPlayer).toBe(state.currentPlayer)
+    expect(parsed.state.status).toBe(state.status)
+    expect(parsed.state.winner).toBe(state.winner)
   })
 
   it('gameToText / parseGameText round-trip preserves board for completed game', () => {
@@ -863,19 +866,19 @@ describe('notation', () => {
 
     expect(state.status).toBe('finished')
 
-    const text = gameToText(state)
+    const text = gameToText(state, 'kalah')
     const parsed = parseGameText(text)
 
-    expect(parsed.status).toBe('finished')
-    expect(parsed.winner).toBe(state.winner)
-    expect(parsed.board).toEqual(state.board)
-    expect(parsed.currentPlayer).toBe(state.currentPlayer)
+    expect(parsed.state.status).toBe('finished')
+    expect(parsed.state.winner).toBe(state.winner)
+    expect(parsed.state.board).toEqual(state.board)
+    expect(parsed.state.currentPlayer).toBe(state.currentPlayer)
   })
 
-  it('gameToText writes header with board, player, status, winner', () => {
+  it('gameToText writes header with game, board, player, status, winner', () => {
     const state = createInitialState()
-    const text = gameToText(state)
-    expect(text).toContain('[4,4,4,4,4,4,0,4,4,4,4,4,4,0|b|i|n]')
+    const text = gameToText(state, 'kalah')
+    expect(text).toContain('[kalah|4,4,4,4,4,4,0,4,4,4,4,4,4,0|b|i|n]')
   })
 })
 

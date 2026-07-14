@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { parseGameText } from '../../engine'
+import { parseGameText, getRulesForGame } from '../../engine'
 import { useGameStore } from '../../state/gameStore'
 import { useHistoryStore } from '../../state/historyStore'
 import { useAnalysisService, recordAnalysisStatus } from '../../state/analysisService'
@@ -59,6 +59,7 @@ function buildGraphPoints(cache: AnalysisCacheEntry[]): EvalGraphPoint[] {
 
 type ModeFilter = 'all' | 'vs-bot' | 'local-2p'
 type ResultFilter = 'all' | 'win' | 'loss' | 'draw'
+type GameFilter = 'all' | 'kalah' | 'mangala'
 
 // ─── GameCard sub-component ────────────────────────────────────────────
 
@@ -96,6 +97,10 @@ function GameCard({ record, serviceCurrent, serviceQueue, onReview, onDelete }: 
     record.mode === 'vs-bot' && record.botLevel
       ? `\u2022 ${BOT_LEVEL_LABEL[record.botLevel]}`
       : null
+
+  const gameLabel = record.game
+    ? strings.gameNames[record.game]
+    : strings.gameNames.kalah
 
   return (
     <div
@@ -148,6 +153,8 @@ function GameCard({ record, serviceCurrent, serviceQueue, onReview, onDelete }: 
 
           {/* Opponent info */}
           <div className="flex items-center gap-1.5">
+            <span className="text-body text-muted">{gameLabel}</span>
+            <span className="text-muted/30">&middot;</span>
             <span className="text-body text-text font-medium">
               {record.mode === 'vs-bot' ? 'Bot' : 'Local 2-Player'}
             </span>
@@ -228,6 +235,7 @@ export function HistoryScreen() {
   const [modeFilter, setModeFilter] = useState<ModeFilter>('all')
   const [resultFilter, setResultFilter] = useState<ResultFilter>('all')
   const [botLevelFilter, setBotLevelFilter] = useState<BotLevel | 'all'>('all')
+  const [gameFilter, setGameFilter] = useState<GameFilter>('all')
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
 
   // ── Derived data ──────────────────────────────────────────────────
@@ -243,10 +251,13 @@ export function HistoryScreen() {
     if (botLevelFilter !== 'all') {
       filtered = filtered.filter((r) => r.botLevel === botLevelFilter)
     }
+    if (gameFilter !== 'all') {
+      filtered = filtered.filter((r) => (r.game ?? 'kalah') === gameFilter)
+    }
     return filtered.sort(
       (a, b) => new Date(b.dateISO).getTime() - new Date(a.dateISO).getTime(),
     )
-  }, [records, modeFilter, resultFilter, botLevelFilter])
+  }, [records, modeFilter, resultFilter, botLevelFilter, gameFilter])
 
   const { totalGames, wins } = useMemo(() => {
     let total = records.length
@@ -285,14 +296,18 @@ export function HistoryScreen() {
   // ── Handlers ─────────────────────────────────────────────────────
 
   const handleOpenReview = (record: (typeof records)[number]) => {
-    const state = parseGameText(record.gameText)
+    const parsed = parseGameText(record.gameText)
+    const state = parsed.state
+    const game = record.game ?? parsed.game ?? 'kalah'
     useGameStore.getState().clear()
     useGameStore.setState({
       gameState: state,
+      rules: getRulesForGame(game),
       savedMeta: {
         mode: record.mode,
         botLevel: record.botLevel ?? 'beginner',
         playerSide: coerceLegacySide(record.playerSide),
+        game,
       },
       analysisCache: record.analysisResult ?? null,
     })
@@ -384,6 +399,28 @@ export function HistoryScreen() {
                   : r === 'loss'
                     ? strings.history.loss
                     : strings.history.draw}
+            </button>
+          ))}
+        </div>
+
+        {/* Game filter */}
+        <div className="flex gap-0.5 bg-surface-2 rounded-chip p-0.5">
+          {(['all', 'kalah', 'mangala'] as const).map((g) => (
+            <button
+              key={g}
+              type="button"
+              onClick={() => setGameFilter(g)}
+              className={`px-3 py-1.5 text-label font-semibold uppercase tracking-label rounded-chip transition-colors ${
+                gameFilter === g
+                  ? 'bg-accent text-bg'
+                  : 'text-muted hover:text-text'
+              }`}
+            >
+              {g === 'all'
+                ? strings.history.filterAll
+                : g === 'kalah'
+                  ? strings.history.filterKalah
+                  : strings.history.filterMangala}
             </button>
           ))}
         </div>
