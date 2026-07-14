@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useGameStore } from '../../state/gameStore'
 import { useModeStore } from '../../state/modeStore'
 import { useHistoryStore } from '../../state/historyStore'
+import { useSettingsStore } from '../../state/settingsStore'
+import type { GameId } from '../../engine'
 import { InstallPrompt } from '../components/InstallPrompt'
 import { Card } from '../components/Card'
 import { strings } from '../strings'
@@ -22,7 +24,10 @@ function StoneCluster({ className = '' }: { className?: string }) {
 export function HomeScreen() {
   const navigate = useNavigate()
   const gameState = useGameStore((s) => s.gameState)
+  const savedMeta = useGameStore((s) => s.savedMeta)
   const records = useHistoryStore((s) => s.records)
+  const selectedGame = useSettingsStore((s) => s.selectedGame)
+  const setSelectedGame = useSettingsStore((s) => s.setSelectedGame)
 
   const stats = useMemo(() => {
     const total = records.length
@@ -55,6 +60,29 @@ export function HomeScreen() {
         {strings.appTitle}
       </h1>
 
+      {/* Game picker */}
+      <div className="flex justify-center mb-4">
+        <div className="flex gap-2" role="radiogroup" aria-label="Select game">
+          {(['kalah', 'mangala'] as GameId[]).map((g) => (
+            <button
+              key={g}
+              type="button"
+              role="radio"
+              aria-checked={selectedGame === g}
+              onClick={() => setSelectedGame(g)}
+              className={
+                'flex-1 px-4 py-2.5 rounded-chip text-body font-medium transition-colors ' +
+                (selectedGame === g
+                  ? 'bg-accent text-bg border border-accent'
+                  : 'bg-surface-2 text-text border border-border hover:border-accent/50')
+              }
+            >
+              {strings.gameNames[g]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Resume Game card */}
       {gameState && (
         <div
@@ -80,9 +108,9 @@ export function HomeScreen() {
                     {strings.home.resumeGame}
                   </p>
                   <p className="text-muted text-body mt-0.5">
-                    {gameState.status === 'finished'
+                    {(gameState.status === 'finished'
                       ? strings.home.resumeFinished
-                      : strings.home.resumePlaying}
+                      : strings.home.resumePlaying) + (savedMeta?.game ? ` \u00b7 ${strings.gameNames[savedMeta.game]}` : '')}
                   </p>
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useHistoryStore } from '../../state/historyStore'
 import type { BotLevel } from '../../bots/types'
 import type { ClassificationKey } from '../theme'
@@ -6,6 +6,8 @@ import { classifyEvalDrop } from '../classification'
 import { strings } from '../strings'
 import { Card } from '../components/Card'
 import { PageLayout } from '../components/PageLayout'
+
+type GameFilter = 'all' | 'kalah' | 'mangala'
 
 interface BotStats {
   total: number
@@ -27,15 +29,21 @@ const levelOrder: BotLevel[] = ['beginner', 'casual', 'strong', 'expert']
 
 export function StatsScreen() {
   const records = useHistoryStore((s) => s.records)
+  const [gameFilter, setGameFilter] = useState<GameFilter>('all')
+
+  const filteredRecords = useMemo(() => {
+    if (gameFilter === 'all') return records
+    return records.filter((r) => (r.game ?? 'kalah') === gameFilter)
+  }, [records, gameFilter])
 
   const stats = useMemo(() => {
-    const total = records.length
-    const wins = records.filter((r) => r.result === 'win').length
-    const losses = records.filter((r) => r.result === 'loss').length
-    const draws = records.filter((r) => r.result === 'draw').length
+    const total = filteredRecords.length
+    const wins = filteredRecords.filter((r) => r.result === 'win').length
+    const losses = filteredRecords.filter((r) => r.result === 'loss').length
+    const draws = filteredRecords.filter((r) => r.result === 'draw').length
 
     const byLevel: Record<string, BotStats> = {}
-    for (const r of records) {
+    for (const r of filteredRecords) {
       if (r.mode === 'vs-bot' && r.botLevel) {
         const lvl = r.botLevel
         if (!byLevel[lvl]) byLevel[lvl] = { total: 0, wins: 0, losses: 0, draws: 0 }
@@ -46,7 +54,7 @@ export function StatsScreen() {
       }
     }
 
-    const analyzedRecords = records.filter(
+    const analyzedRecords = filteredRecords.filter(
       (r) => r.analysisResult && r.analysisResult.length > 0,
     )
 
@@ -99,7 +107,7 @@ export function StatsScreen() {
       avgGameLength,
       analyzedCount: analyzedRecords.length,
     }
-  }, [records])
+  }, [filteredRecords])
 
   const hasData = stats.total > 0
   const hasAnalysis = stats.totalClassified > 0
@@ -107,6 +115,30 @@ export function StatsScreen() {
 
   return (
     <PageLayout title={strings.stats.title}>
+      {/* Game filter */}
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        <div className="flex gap-0.5 bg-surface-2 rounded-chip p-0.5">
+          {(['all', 'kalah', 'mangala'] as const).map((g) => (
+            <button
+              key={g}
+              type="button"
+              onClick={() => setGameFilter(g)}
+              className={`px-3 py-1.5 text-label font-semibold uppercase tracking-label rounded-chip transition-colors ${
+                gameFilter === g
+                  ? 'bg-accent text-bg'
+                  : 'text-muted hover:text-text'
+              }`}
+            >
+              {g === 'all'
+                ? strings.history.filterAll
+                : g === 'kalah'
+                  ? strings.history.filterKalah
+                  : strings.history.filterMangala}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {!hasData ? (
         <div className="flex flex-col items-center gap-4 text-center mt-12">
           <div className="w-16 h-16 rounded-full bg-surface-2 flex items-center justify-center text-2xl">

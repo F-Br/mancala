@@ -159,37 +159,66 @@ export const strings = {
     noBotGames: 'No bot games played.',
   },
   tutorial: {
-    title: 'How to Play Mancala',
     next: 'Next',
     prev: 'Back',
     done: 'Got it!',
     skip: 'Skip tutorial',
-    panels: [
-      {
-        title: 'The Board & Your Goal',
-        text: 'The board has 12 pits (6 per side) and 2 large stores. Each pit starts with 4 stones. Your goal is to collect more stones in your store than your opponent.',
-      },
-      {
-        title: 'Sowing Stones',
-        text: "Pick a pit on your side. All its stones are picked up and sown one-by-one counterclockwise into the following pits. Skip your opponent's store — only your own store collects during sowing.",
-      },
-      {
-        title: 'Extra Turn',
-        text: 'If the last stone lands in your own store, you get an extra turn! This is a key strategic element — chain multiple moves together.',
-      },
-      {
-        title: 'Captures',
-        text: "If the last stone lands in an empty pit on your side, you capture that stone plus all stones in the pit directly opposite on the opponent's side. They go into your store.",
-      },
-      {
-        title: 'Game End',
-        text: "The game ends when one player's side is completely empty. The opponent collects all remaining stones from their side into their store. The player with the most stones wins.",
-      },
-      {
-        title: 'Pro Tip',
-        text: 'Look ahead 1-2 moves. Watch for setups where you can end in an empty pit to capture. Ending in your store for extra turns lets you chain moves and control the tempo.',
-      },
-    ] as { title: string; text: string }[],
+  },
+  tutorials: {
+    kalah: {
+      title: 'How to Play Kalah',
+      panels: [
+        {
+          title: 'The Board & Your Goal',
+          text: 'The board has 12 pits (6 per side) and 2 large stores. Each pit starts with 4 stones. Your goal is to collect more stones in your store than your opponent.',
+        },
+        {
+          title: 'Sowing Stones',
+          text: "Pick a pit on your side. All its stones are picked up and sown one-by-one counterclockwise into the following pits. Skip your opponent's store — only your own store collects during sowing.",
+        },
+        {
+          title: 'Extra Turn',
+          text: 'If the last stone lands in your own store, you get an extra turn! This is a key strategic element — chain multiple moves together.',
+        },
+        {
+          title: 'Captures',
+          text: "If the last stone lands in an empty pit on your side, you capture that stone plus all stones in the pit directly opposite on the opponent's side. They go into your store.",
+        },
+        {
+          title: 'Game End',
+          text: "The game ends when one player's side is completely empty. The opponent collects all remaining stones from their side into their store. The player with the most stones wins.",
+        },
+        {
+          title: 'Pro Tip',
+          text: 'Look ahead 1-2 moves. Watch for setups where you can end in an empty pit to capture. Ending in your store for extra turns lets you chain moves and control the tempo.',
+        },
+      ] as { title: string; text: string }[],
+    },
+    mangala: {
+      title: 'How to Play Mangala',
+      panels: [
+        {
+          title: 'Sowing Stones',
+          text: "Pick a pit on your side. The first stone goes back into the pit you chose, then the rest are sown one-by-one counterclockwise. A pit with a single stone simply moves it to the next pit. Your own store collects a stone as you pass; the opponent's store is skipped.",
+        },
+        {
+          title: 'Extra Turns',
+          text: 'If your last stone lands in your own store, you move again.',
+        },
+        {
+          title: 'Even Captures',
+          text: "If your last stone lands in a pit on the opponent's side and makes its total even — 2, 4, 6 and so on — you capture every stone in that pit.",
+        },
+        {
+          title: 'Empty-Pit Captures',
+          text: 'If your last stone lands in an empty pit on your own side and the pit directly opposite holds stones, you capture both — their stones and your landing stone.',
+        },
+        {
+          title: 'Ending the Game',
+          text: "The moment either side runs out of stones, the game ends — and the player whose side is empty collects every stone remaining on the opponent's side. Most stones wins; 24\u201324 is a draw.",
+        },
+      ] as { title: string; text: string }[],
+    },
   },
   placeholder: {
     gameHistory: 'Game history coming soon.',

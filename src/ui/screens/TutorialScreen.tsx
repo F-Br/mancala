@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import type { GameId } from '../../engine'
 import { useSettingsStore } from '../../state/settingsStore'
+import { useGameStore } from '../../state/gameStore'
 import { strings } from '../strings'
 
 interface BoardDiagramProps {
@@ -90,10 +92,18 @@ const panelDiagrams: ((active: boolean) => React.ReactNode)[] = [
 
 export function TutorialScreen() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [panel, setPanel] = useState(0)
   const setTutorialSeen = useSettingsStore((s) => s.setTutorialSeen)
+  const selectedGame = useSettingsStore((s) => s.selectedGame)
+  const savedMeta = useGameStore((s) => s.savedMeta)
 
-  const panels = strings.tutorial.panels
+  const gameId: GameId = (location.state as { game?: GameId } | null)?.game
+    ?? savedMeta?.game
+    ?? selectedGame
+
+  const tutorial = strings.tutorials[gameId]
+  const panels = tutorial.panels
 
   const handleDone = () => {
     setTutorialSeen(true)

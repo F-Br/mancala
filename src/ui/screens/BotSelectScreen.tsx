@@ -4,6 +4,7 @@ import type { BotLevel } from '../../bots/types'
 import type { Side } from '../../engine'
 import { useGameStore } from '../../state/gameStore'
 import { useModeStore } from '../../state/modeStore'
+import { useSettingsStore } from '../../state/settingsStore'
 import { strings } from '../strings'
 import { PageLayout } from '../components/PageLayout'
 import { Card } from '../components/Card'
@@ -33,6 +34,7 @@ export function BotSelectScreen() {
   const navigate = useNavigate()
   const [selectedLevel, setSelectedLevel] = useState<BotLevel>('beginner')
   const [selectedSide, setSelectedSide] = useState<Side | 'random'>('random')
+  const selectedGame = useSettingsStore((s) => s.selectedGame)
 
   const handleStart = () => {
     useGameStore.getState().clear()
@@ -44,6 +46,9 @@ export function BotSelectScreen() {
 
   return (
     <PageLayout title={strings.botSelect.title}>
+      <p className="text-label font-semibold uppercase tracking-label text-muted -mt-4 mb-6">
+        {strings.gameNames[selectedGame]}
+      </p>
       <div className="max-w-md mx-auto flex flex-col gap-4 pb-16 md:pb-0">
         <Card>
           <div className="flex flex-col gap-5">
