@@ -9,6 +9,7 @@ export default defineConfig({
     hookTimeout: 300000,
     include: [
       'src/engine/__tests__/tablebase.test.ts',
+      'src/engine/__tests__/mangalaTablebase.test.ts',
       'src/bots/__tests__/selfplay.test.ts',
     ],
   },

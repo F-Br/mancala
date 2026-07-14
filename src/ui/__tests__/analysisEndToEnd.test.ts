@@ -8,14 +8,14 @@ import type { AnalysisResult } from '../../bots/analysisClient'
 import type { TbProgressMsg } from '../../engine'
 import { executeBatchAnalysis, replayPositions } from '../batchAnalysis'
 
-import { lateGameFixture, RULES, countBoardStones } from '../../bots/__tests__/fixtures'
+import { lateGameFixture, RULES, countBoardStones, mangalaLateGameFixture, MANGALA_RULES } from '../../bots/__tests__/fixtures'
 
 interface AnalyzeOptions {
   totalExtractionBudgetMs?: number
   perStepExtractionBudgetMs?: number
 }
 
-function createTestHarness(skipTablebase = true, maxTTEntries?: number) {
+function createTestHarness(skipTablebase = true, maxTTEntries?: number, game: 'kalah' | 'mangala' = 'kalah') {
   const pending = new Map<
     number,
     { resolve: (r: AnalysisResponse) => void; reject: (e: Error) => void }
@@ -62,6 +62,7 @@ function createTestHarness(skipTablebase = true, maxTTEntries?: number) {
         state,
         timeBudgetMs: budgetMs,
         requestId: id,
+        game,
         ...(playedPitIndex !== undefined ? { playedPitIndex } : {}),
         ...(opts?.totalExtractionBudgetMs !== undefined ? { totalExtractionBudgetMs: opts.totalExtractionBudgetMs } : {}),
         ...(opts?.perStepExtractionBudgetMs !== undefined ? { perStepExtractionBudgetMs: opts.perStepExtractionBudgetMs } : {}),
@@ -191,4 +192,75 @@ describe('analysis end-to-end bounded-time guarantee', () => {
       expect(r.entry.pv.length).toBeGreaterThan(0)
     }
   }, 60000)
+})
+
+describe('analysis end-to-end: Mangala variant', () => {
+  it('completes Mangala full game (>=20 positions) within positions × 2000ms wall clock', async () => {
+    const gameState = mangalaLateGameFixture
+    const totalPositions = gameState.moveHistory.length
+    expect(totalPositions).toBeGreaterThanOrEqual(20)
+
+    const positions = replayPositions(gameState, 'bottom', MANGALA_RULES)
+
+    const { analyze } = createTestHarness(true, undefined, 'mangala')
+    const analyzeFn = makeAnalyzeFn(analyze, {
+      totalExtractionBudgetMs: 500,
+      perStepExtractionBudgetMs: 50,
+    })
+
+    const startTime = performance.now()
+    const results = await executeBatchAnalysis({
+      positions,
+      analyze: analyzeFn,
+      positionBudgetMs: 400,
+    })
+    const elapsed = performance.now() - startTime
+
+    const wallClockBudget = totalPositions * 2000
+    expect(elapsed).toBeLessThan(wallClockBudget)
+
+    expect(results.length).toBe(totalPositions)
+
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]!
+      const pos = positions[i]!
+
+      if (!pos.move || pos.state.status !== 'in-progress') {
+        expect(r.entry.bestPitIndex).toBe(-1)
+        continue
+      }
+
+      const legal = legalMoves(pos.state, MANGALA_RULES)
+      expect(
+        legal,
+        `Mangala pos ${i}: bestPitIndex ${r.entry.bestPitIndex} not in [${legal.join(',')}]`,
+      ).toContain(r.entry.bestPitIndex)
+
+      const pitStones = countBoardStones(pos.state)
+      if (pitStones > 12) {
+        expect(
+          r.entry.pv.length >= 8 || r.reachedTerminal,
+          `Mangala pos ${i}: PV length ${r.entry.pv.length} < 8 and !reachedTerminal (${pitStones} pit stones)`,
+        ).toBe(true)
+      }
+    }
+
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]!
+      const pos = positions[i]!
+
+      if (!pos.move || pos.state.status !== 'in-progress') continue
+      if (r.entry.pv.length === 0) continue
+
+      let s = cloneState(pos.state)
+      for (const pit of r.entry.pv) {
+        const legal = legalMoves(s, MANGALA_RULES)
+        expect(
+          legal,
+          `Mangala pos ${i} PV step: pit ${pit} not legal in state with board [${s.board.join(',')}]`,
+        ).toContain(pit)
+        s = applyMove(s, pit, MANGALA_RULES)
+      }
+    }
+  }, 180000)
 })

@@ -414,3 +414,108 @@ The two previously documented issues have been resolved across the following com
 1. **Analysis timeout (was ~5 min/pos):** Resolved by adding `SearchLimits.deadlineMs` enforcement inside `minimaxWithABTT` (intra-iteration abort at node level every 2048 nodes), capping extra-turn chains at `MAX_EXTRA_TURN_EXTENSION = 3`, and setting realistic production budgets of `ANALYSIS_POSITION_BUDGET_MS = 3000 ms`. The end-to-end test verifies bounded-time completion with a "never hangs" guarantee.
 
 2. **Single-move PV display:** Resolved by replacing the hardcoded 100ms per-step budget in `extractPrincipalVariation` with a budget proportional to the remaining main budget, integrating the tablebase endpoint for endgame PV extension, and adding the `reachedTerminal` flag so the UI can distinguish "game ended" from "PV truncated."
+
+---
+
+## 13. Mangala Rules (Turkish variant)
+
+**File:** `src/engine/rules.ts`, `src/engine/moves.ts`
+
+The engine supports Mangala (Turkish Mancala) as a second game variant alongside Kalah. All four rule differences are `RuleConfig`-driven:
+
+| Rule | Kalah | Mangala |
+|---|---|---|
+| `sowing` | `'skip-source'` | `'include-source'` |
+| `captureRule` | `'kalah-standard'` | `'mangala'` |
+| `endSweep` | `'to-side-owner'` | `'to-emptied-player'` |
+| `extraTurnEnabled` | `true` | `true` |
+
+### 13a. Include-source sowing (`moves.ts:105-114`)
+
+When `sowing === 'include-source'` and the pit has ≥2 stones, the first stone is placed back into the source pit before the remaining stones are distributed. With 1 stone, the single stone is sown to the next position (same as skip-source). The source pit's final stone count is 1 (the returned stone) when the move produces no captures.
+
+### 13b. Mangala capture (`moves.ts:131-151`)
+
+When `captureRule === 'mangala'` and the last stone does NOT land in the player's store:
+
+- **Own pit, exactly 1 stone:** Kalah-style capture — capture the opposite pit's stones plus the capturing stone.
+- **Opponent's pit, even count:** capture those stones directly.
+- **Opponent's pit, odd count:** no capture.
+- **Own pit, >1 stone:** no capture (the just-sown stone adds to existing stones).
+
+### 13c. Reversed end sweep (`moves.ts:52-63`)
+
+When `endSweep === 'to-emptied-player'`, the player whose side is emptied collects the **opponent's** remaining pit stones. This is the reverse of Kalah, where each side keeps its own. If both sides are empty, no sweep occurs.
+
+### 13d. Interaction with tablebase
+
+The tablebase decomposability property holds for Mangala (store contents never influence legal play or stone flow), so the same `generateTablebase` function works with `MANGALA_STANDARD`. The `computeTBEntry` function in `tablebase.ts` handles include-source sowing, the dual capture modes, and reversed end-sweep identically to `applyMove` — both call the same `computeMoveDetails` + `applyFinalSweep` path.
+
+### 13e. Per-game tablebase keys
+
+IndexedDB tablebase cache keys are per-game:
+
+| Game | Key |
+|---|---|
+| Kalah | `tb-k12-kalah-standard-v2` |
+| Mangala | `tb-k12-mangala-standard-v2` |
+
+The `TB_K = 12` parameter (5.4M entries, ~5.2 MiB) is shared across games.
+
+### 13f. Per-game evaluation weights
+
+Evaluation weights have per-game defaults in `WEIGHTS_BY_GAME` (`src/bots/evaluation.ts:179`):
+
+| Weight | Kalah | Mangala (initial) |
+|---|---|---|
+| `storeDiff` | 1.0 | 1.0 |
+| `mobility` | 0.5 | 0.5 |
+| `pitStones` | [0.06, 0.07, 0.08, 0.09, 0.10, 0.11] | [0, 0, 0, 0, 0, 0] |
+| `ownCapturePerStone` | 0.6 | 0.6 |
+| `oppCaptureThreatPerStone` | 0 | 0 |
+| `extraTurnMove` | 0 | 0 |
+| `emptyPitSetup` | 0.2 | 0.2 |
+
+Mangala's pit-stone weights are zeroed because the reversed end-sweep (the emptied player collects the opponent's remaining stones) makes Kalah's hoard-friendly positive pit weights strategically backwards. Mangala weights are tuned via `scripts/tuneEval.ts --game mangala` (see §13g).
+
+### 13g. Mangala evaluation weight tuning results
+
+Tuning was performed with `npm run tune` at `--game mangala` with 60 games per candidate at 150 ms/move, alternating first player between matches. The baseline was the placeholder `WEIGHTS_BY_GAME.mangala` (Kalah weights with pit-stones zeroed).
+
+**Observation:** Mangala under `MANGALA_STANDARD` exhibits an extreme first-move (bottom-player) advantage at 150 ms/move. In all matches, the bottom player wins ~80% of games regardless of evaluation weights, which overwhelms the tuning signal and makes self-play results unreliable at this budget.
+
+**Candidate directions tried (Round 1, 60 games each vs baseline):**
+
+| Candidate | Weights | W / D / L | Win % | Score % |
+|---|---|---|---|---|
+| `NegPitStones` | `pitStones=[-0.03,...]` | 27 / 8 / 25 | 45.0% | 51.7% |
+| `ExtraTurnBoost` | `extraTurnMove=0.4` | 38 / 12 / 10 | 63.3% | 73.3% |
+| `DoubledCapture` | `ownCapturePerStone=1.2, oppCaptureThreatPerStone=0` | 1 / 27 / 32 | 1.7% | 24.2% |
+| `HalvedCapture` | `ownCapturePerStone=0.3, oppCaptureThreatPerStone=0` | 28 / 26 / 6 | 46.7% | 68.3% |
+| `Baseline (self)` | Placeholder vs itself | 16 / 18 / 26 | 26.7% | 41.7% |
+
+**Round 2 — Best = `extraTurnMove=0.4` (adopted from Round 1 at 63.3%):**
+
+| Candidate | Weights | W / D / L | Win % | Score % |
+|---|---|---|---|---|
+| `NegPit+Extra` | `pitStones=[-0.03,...], extraTurnMove=0.4` | 23 / 18 / 19 | 38.3% | 53.3% |
+| `ExtraTurnDouble` | `extraTurnMove=0.8` | 42 / 14 / 4 | 70.0% | 81.7% |
+| `ExtraTurnHalved` | `extraTurnMove=0.2` | 29 / 28 / 3 | 48.3% | 71.7% |
+| `HalvedCapture+Extra` | `ownCapturePerStone=0.3, extraTurnMove=0.4` | 39 / 4 / 17 | 65.0% | 68.3% |
+
+**Round 3 — Best = `extraTurnMove=0.8` (adopted from Round 2 at 70.0%):**
+
+| Candidate | Weights | W / D / L | Win % | Score % |
+|---|---|---|---|---|
+| `HalvedCapture(vs0.8)` | `ownCapturePerStone=0.3, extraTurnMove=0.8` | 32 / 20 / 8 | 53.3% | 70.0% |
+| `NegPit+Extra0.8` | `pitStones=[-0.03,...], extraTurnMove=0.8` | 55 / 3 / 2 | 91.7% | 94.2% |
+| `DoubledCapture(vs0.8)` | `ownCapturePerStone=1.2, extraTurnMove=0.8` | 24 / 9 / 27 | 40.0% | 47.5% |
+| `ExtraTurnMid(0.6)` | `extraTurnMove=0.6` | 17 / 14 / 29 | 28.3% | 40.0% |
+
+**Verification (120 games):** `pitStones=[-0.03,...], extraTurnMove=0.8` vs baseline: 49W / 15D / 56L = 40.8% win rate. The bot won 49/60 as bottom and 0/60 as top, confirming the first-move advantage dominates.
+
+**Conclusion:** No candidate reliably outperformed the baseline at 60-game sample sizes after accounting for first-move advantage. The placeholder weights are kept as `WEIGHTS_BY_GAME.mangala`. This is a "keep the placeholder" outcome — the extreme first-move advantage in Mangala (≈80% bottom win rate at 150 ms/move) makes low-budget self-play tuning uninformative. Meaningful tuning would require larger game counts, longer time controls, or a dedicated evaluation-symmetry test.
+
+### 13h. Game-tagged gameText headers
+
+`gameToText` (`src/engine/notation.ts`) prefixes the game notation with a header line matching `^\[Game "([^"]*)"\]`. When the header is absent (legacy), the game defaults to Kalah. `parseGameText` accepts an optional `defaultGame` parameter for backward compatibility.

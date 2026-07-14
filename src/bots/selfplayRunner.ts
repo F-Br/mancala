@@ -1,6 +1,6 @@
 import { createInitialState, applyMove } from '../engine'
 import { KALAH_STANDARD } from '../engine'
-import type { GameState, Side } from '../engine'
+import type { GameState, Side, RuleConfig } from '../engine'
 
 export type RandomFn = () => number
 
@@ -17,8 +17,12 @@ export interface BotPlayer {
 
 export const RULES = KALAH_STANDARD
 
-export function playGame(bottomPlayer: BotPlayer, topPlayer: BotPlayer): GameState {
-  let state = createInitialState(RULES, 'bottom')
+export function playGame(
+  bottomPlayer: BotPlayer,
+  topPlayer: BotPlayer,
+  rules: RuleConfig = KALAH_STANDARD,
+): GameState {
+  let state = createInitialState(rules, 'bottom')
   let moveCount = 0
   const maxMoves = 200
 
@@ -26,7 +30,7 @@ export function playGame(bottomPlayer: BotPlayer, topPlayer: BotPlayer): GameSta
     const bot = state.currentPlayer === 'bottom' ? bottomPlayer : topPlayer
     const move = bot.pickMove(state)
     if (move < 0) break
-    state = applyMove(state, move, RULES)
+    state = applyMove(state, move, rules)
     moveCount++
   }
 
@@ -47,6 +51,7 @@ export function runMatch(
   botB: BotPlayer,
   totalGames: number,
   log?: (msg: string) => void,
+  rules: RuleConfig = KALAH_STANDARD,
 ): MatchResult {
   let winsA = 0
   let winsB = 0
@@ -58,6 +63,7 @@ export function runMatch(
     const game = playGame(
       botAIsBottom ? botA : botB,
       botAIsBottom ? botB : botA,
+      rules,
     )
 
     const botASide: Side = botAIsBottom ? 'bottom' : 'top'

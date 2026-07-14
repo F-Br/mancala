@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { KALAH_STANDARD } from '../../engine'
+import { KALAH_STANDARD, MANGALA_STANDARD } from '../../engine'
 import type { Side } from '../../engine'
 import { pickMoveBeginner, pickMoveCasual, pickMoveStrong, pickMoveExpert } from '../search'
 import type { BotPlayer } from '../selfplayRunner'
 import { playGame, createSeededRandom } from '../selfplayRunner'
+import { WEIGHTS_BY_GAME } from '../evaluation'
+import { evaluateExpert } from '../evaluation'
 
 const RULES = KALAH_STANDARD
 
@@ -157,4 +159,51 @@ describe('self-play: new-Expert (PVS) vs old-Expert (no PVS)', () => {
     // independently — the eval weights are validated at 75–100 % vs legacy.
     expect(newExpertWins / totalGames).toBeGreaterThanOrEqual(0.40)
   }, 600000)
+})
+
+describe('self-play: Mangala Expert vs Casual (smoke)', () => {
+  function boardSum(board: number[]): number {
+    let s = 0
+    for (const v of board) s += v
+    return s
+  }
+
+  it('Expert beats Casual >= 7/10 and every game terminates legally, stones sum to 48', () => {
+    const mangalaWeights = WEIGHTS_BY_GAME.mangala
+    const expertPlayer: BotPlayer = {
+      pickMove: (s) => {
+        const r = pickMoveExpert(s, MANGALA_STANDARD, 150, undefined, true, (st, ru) => evaluateExpert(st, ru, mangalaWeights))
+        return r.pv[0] ?? -1
+      },
+    }
+
+    let expertWins = 0
+    const totalGames = 10
+
+    for (let i = 0; i < totalGames; i++) {
+      const expertIsBottom = i < totalGames / 2
+
+      const casual: BotPlayer = {
+        pickMove: (s) => {
+          const r = pickMoveCasual(s, MANGALA_STANDARD)
+          return r.pv[0] ?? -1
+        },
+      }
+
+      const game = playGame(
+        expertIsBottom ? expertPlayer : casual,
+        expertIsBottom ? casual : expertPlayer,
+        MANGALA_STANDARD,
+      )
+
+      expect(game.status).toBe('finished')
+      expect(boardSum(game.board)).toBe(48)
+
+      const expertSide: Side = expertIsBottom ? 'bottom' : 'top'
+      if (game.winner === expertSide) expertWins++
+    }
+
+    console.log(`[MANGALA SELF-PLAY SMOKE] Expert wins: ${expertWins}/${totalGames}`)
+    expect(expertWins).toBeGreaterThanOrEqual(7)
+  })
 })
