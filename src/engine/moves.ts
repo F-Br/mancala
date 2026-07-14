@@ -39,19 +39,39 @@ function isSideEmpty(board: number[], player: Side, pitsPerSide: number): boolea
   return true
 }
 
-function applyFinalSweep(board: number[], pitsPerSide: number): void {
+function applyFinalSweep(
+  board: number[],
+  pitsPerSide: number,
+  endSweep: 'to-side-owner' | 'to-emptied-player',
+): void {
   const bottomEmpty = isSideEmpty(board, 'bottom', pitsPerSide)
   const topEmpty = isSideEmpty(board, 'top', pitsPerSide)
 
-  if (bottomEmpty && !topEmpty) {
-    for (let i = pitsPerSide + 1; i <= pitsPerSide * 2; i++) {
-      board[pitsPerSide * 2 + 1]! += board[i]!
-      board[i] = 0
+  if (bottomEmpty && topEmpty) return
+
+  if (endSweep === 'to-emptied-player') {
+    if (bottomEmpty) {
+      for (let i = pitsPerSide + 1; i <= pitsPerSide * 2; i++) {
+        board[pitsPerSide]! += board[i]!
+        board[i] = 0
+      }
+    } else {
+      for (let i = 0; i < pitsPerSide; i++) {
+        board[pitsPerSide * 2 + 1]! += board[i]!
+        board[i] = 0
+      }
     }
-  } else if (topEmpty && !bottomEmpty) {
-    for (let i = 0; i < pitsPerSide; i++) {
-      board[pitsPerSide]! += board[i]!
-      board[i] = 0
+  } else {
+    if (bottomEmpty) {
+      for (let i = pitsPerSide + 1; i <= pitsPerSide * 2; i++) {
+        board[pitsPerSide * 2 + 1]! += board[i]!
+        board[i] = 0
+      }
+    } else {
+      for (let i = 0; i < pitsPerSide; i++) {
+        board[pitsPerSide]! += board[i]!
+        board[i] = 0
+      }
     }
   }
 }
@@ -76,19 +96,30 @@ export function computeMoveDetails(
   const opponentStore = getOpponentStore(currentPlayer)
 
   const newBoard = [...board]
-  // stones is guaranteed > 0 because pitIndex is a legal move
   const stones = newBoard[pitIndex]!
   newBoard[pitIndex] = 0
 
   let currentPos = pitIndex
   const sowedTo: number[] = []
 
-  for (let i = 0; i < stones; i++) {
-    do {
-      currentPos = (currentPos + 1) % totalPositions
-    } while (currentPos === opponentStore)
-    newBoard[currentPos]!++
-    sowedTo.push(currentPos)
+  if (rules.sowing === 'include-source' && stones >= 2) {
+    newBoard[pitIndex]!++
+    sowedTo.push(pitIndex)
+    for (let i = 1; i < stones; i++) {
+      do {
+        currentPos = (currentPos + 1) % totalPositions
+      } while (currentPos === opponentStore)
+      newBoard[currentPos]!++
+      sowedTo.push(currentPos)
+    }
+  } else {
+    for (let i = 0; i < stones; i++) {
+      do {
+        currentPos = (currentPos + 1) % totalPositions
+      } while (currentPos === opponentStore)
+      newBoard[currentPos]!++
+      sowedTo.push(currentPos)
+    }
   }
 
   const lastPos = sowedTo[sowedTo.length - 1]!
@@ -97,6 +128,27 @@ export function computeMoveDetails(
 
   if (lastPos === ownStore) {
     wasExtraTurn = rules.extraTurnEnabled
+  } else if (rules.captureRule === 'mangala') {
+    if (isOwnPit(lastPos, currentPlayer, pitsPerSide)) {
+      if (newBoard[lastPos] === 1) {
+        const oppIdx = oppositePit(lastPos, pitsPerSide)
+        const oppositeStones = newBoard[oppIdx]!
+        if (oppositeStones > 0) {
+          const capturedCount = 1 + oppositeStones
+          newBoard[ownStore]! += capturedCount
+          newBoard[lastPos]! -= 1
+          newBoard[oppIdx] = 0
+          captured = { fromPit: oppIdx, count: capturedCount }
+        }
+      }
+    } else {
+      if (newBoard[lastPos]! % 2 === 0) {
+        const capturedCount = newBoard[lastPos]!
+        newBoard[ownStore]! += capturedCount
+        newBoard[lastPos] = 0
+        captured = { fromPit: lastPos, count: capturedCount }
+      }
+    }
   } else if (
     rules.captureRule === 'kalah-standard' &&
     isOwnPit(lastPos, currentPlayer, pitsPerSide) &&
@@ -179,7 +231,7 @@ export function applyMove(
     isSideEmpty(newBoard, 'bottom', rules.pitsPerSide) ||
     isSideEmpty(newBoard, 'top', rules.pitsPerSide)
   ) {
-    applyFinalSweep(newBoard, rules.pitsPerSide)
+    applyFinalSweep(newBoard, rules.pitsPerSide, rules.endSweep ?? 'to-side-owner')
     status = 'finished'
     winner = determineWinner(newBoard)
   }

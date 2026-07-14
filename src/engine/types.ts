@@ -4,7 +4,9 @@ export interface RuleConfig {
   pitsPerSide: number
   stonesPerPit: number
   extraTurnEnabled: boolean
-  captureRule: 'kalah-standard' | 'none'
+  captureRule: 'kalah-standard' | 'mangala' | 'none'
+  sowing?: 'skip-source' | 'include-source'
+  endSweep?: 'to-side-owner' | 'to-emptied-player'
 }
 
 export type GameStatus = 'in-progress' | 'finished'
