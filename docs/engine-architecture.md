@@ -480,41 +480,47 @@ Mangala's pit-stone weights are zeroed because the reversed end-sweep (the empti
 
 ### 13g. Mangala evaluation weight tuning results
 
-Tuning was performed with `npm run tune` at `--game mangala` with 60 games per candidate at 150 ms/move, alternating first player between matches. The baseline was the placeholder `WEIGHTS_BY_GAME.mangala` (Kalah weights with pit-stones zeroed).
+Tuning follows the same two-tier methodology as Kalah: a 6-phase parameter sweep at a fast time control (`scripts/tuneMangalaSweep.ts`), followed by validation at Expert production budget (`scripts/validateMangala.ts`).
 
-**Observation:** Mangala under `MANGALA_STANDARD` exhibits an extreme first-move (bottom-player) advantage at 150 ms/move. In all matches, the bottom player wins ~80% of games regardless of evaluation weights, which overwhelms the tuning signal and makes self-play results unreliable at this budget.
+**Tier 1 — 300ms/move sweep (40 games per config vs baseline placeholder):**
 
-**Candidate directions tried (Round 1, 60 games each vs baseline):**
+Baseline: `WEIGHTS_BY_GAME.mangala` (storeDiff=1, mobility=0.5, pitStones=[0,0,0,0,0,0], ownCapture=0.6, extraTurn=0, oppThreat=0, emptyPitSetup=0.2)
 
-| Candidate | Weights | W / D / L | Win % | Score % |
-|---|---|---|---|---|
-| `NegPitStones` | `pitStones=[-0.03,...]` | 27 / 8 / 25 | 45.0% | 51.7% |
-| `ExtraTurnBoost` | `extraTurnMove=0.4` | 38 / 12 / 10 | 63.3% | 73.3% |
-| `DoubledCapture` | `ownCapturePerStone=1.2, oppCaptureThreatPerStone=0` | 1 / 27 / 32 | 1.7% | 24.2% |
-| `HalvedCapture` | `ownCapturePerStone=0.3, oppCaptureThreatPerStone=0` | 28 / 26 / 6 | 46.7% | 68.3% |
-| `Baseline (self)` | Placeholder vs itself | 16 / 18 / 26 | 26.7% | 41.7% |
+| Phase | Best config | W / D / L | Score % |
+|---|---|---|---|
+| P1-pitStones | flat-neg(-0.08) | 21 / 19 / 0 | 76.3% |
+| P2-extraTurnMove | extraTurn=0.4 | 36 / 4 / 0 | 95.0% |
+| P3-ownCapturePerStone | ownCapture=0.8 | 38 / 2 / 0 | 97.5% |
+| P4-oppCaptureThreat | oppThreat=0 (keep) | 38 / 0 / 2 | 95.0% |
+| P5-mobility | mobility=0.5 (keep) | 37 / 3 / 0 | 96.3% |
 
-**Round 2 — Best = `extraTurnMove=0.4` (adopted from Round 1 at 63.3%):**
+Sweep-best config: `pitStones=[-0.08,...], ownCapturePerStone=0.8, extraTurnMove=0.4, mobility=0.5, oppCaptureThreatPerStone=0`
 
-| Candidate | Weights | W / D / L | Win % | Score % |
-|---|---|---|---|---|
-| `NegPit+Extra` | `pitStones=[-0.03,...], extraTurnMove=0.4` | 23 / 18 / 19 | 38.3% | 53.3% |
-| `ExtraTurnDouble` | `extraTurnMove=0.8` | 42 / 14 / 4 | 70.0% | 81.7% |
-| `ExtraTurnHalved` | `extraTurnMove=0.2` | 29 / 28 / 3 | 48.3% | 71.7% |
-| `HalvedCapture+Extra` | `ownCapturePerStone=0.3, extraTurnMove=0.4` | 39 / 4 / 17 | 65.0% | 68.3% |
+Sweep findings (all vs baseline):
+- Positive pit stones (0.03) scored 23.8% — severely punished in Mangala
+- Negative pit stones (-0.08) scored 76.3% — strongly favoured at shallow depth
+- extraTurnMove peaked at 0.4 (95.0%); higher values declined (0.8: 43.8%)
+- ownCapturePerStone peaked at 0.8 (97.5%); higher values declined (1.2: 46.3%)
+- oppCaptureThreatPerStone uniformly hurt performance (best was 0)
+- mobility peaked at 0.5 (96.3%), same as Kalah
 
-**Round 3 — Best = `extraTurnMove=0.8` (adopted from Round 2 at 70.0%):**
+**Tier 2 — 3000ms/move validation (Expert production budget):**
 
-| Candidate | Weights | W / D / L | Win % | Score % |
-|---|---|---|---|---|
-| `HalvedCapture(vs0.8)` | `ownCapturePerStone=0.3, extraTurnMove=0.8` | 32 / 20 / 8 | 53.3% | 70.0% |
-| `NegPit+Extra0.8` | `pitStones=[-0.03,...], extraTurnMove=0.8` | 55 / 3 / 2 | 91.7% | 94.2% |
-| `DoubledCapture(vs0.8)` | `ownCapturePerStone=1.2, extraTurnMove=0.8` | 24 / 9 / 27 | 40.0% | 47.5% |
-| `ExtraTurnMid(0.6)` | `extraTurnMove=0.6` | 17 / 14 / 29 | 28.3% | 40.0% |
+The sweep-best config was tested at 3000ms/move (20 games) vs the baseline placeholder:
 
-**Verification (120 games):** `pitStones=[-0.03,...], extraTurnMove=0.8` vs baseline: 49W / 15D / 56L = 40.8% win rate. The bot won 49/60 as bottom and 0/60 as top, confirming the first-move advantage dominates.
+`pitStones=[-0.08,...], ownCapture=0.8, extraTurn=0.4` vs baseline: **0W / 1D / 19L = 2.5% score**
 
-**Conclusion:** No candidate reliably outperformed the baseline at 60-game sample sizes after accounting for first-move advantage. The placeholder weights are kept as `WEIGHTS_BY_GAME.mangala`. This is a "keep the placeholder" outcome — the extreme first-move advantage in Mangala (≈80% bottom win rate at 150 ms/move) makes low-budget self-play tuning uninformative. Meaningful tuning would require larger game counts, longer time controls, or a dedicated evaluation-symmetry test.
+Isolated 3000ms tests (8 games each vs baseline):
+
+| Change | W / D / L | Score % |
+|---|---|---|
+| `pitStones=[-0.08]` only | 0 / 2 / 6 | 12.5% |
+| `extraTurnMove=0.4` only | 2 / 2 / 4 | 37.5% |
+| `ownCapturePerStone=0.8` only | 1 / 6 / 1 | 50.0% |
+| `pits [-0.08] + extraTurn 0.4` | 0 / 4 / 4 | 25.0% |
+| `pits [-0.08] + ownCapture 0.8` | 1 / 6 / 1 | 50.0% |
+
+**Conclusion:** The 300ms sweep identified promising directions (negative pit stones, extra-turn weighting) that fail to transfer to 3000ms production depth. The deeper search punishes the aggressive stone-shedding strategy that shallow search favours. No candidate reliably beat the baseline at 3000ms. The placeholder `WEIGHTS_BY_GAME.mangala` is kept unchanged. Future tuning efforts should use ≥3000ms time controls or time-odds methodology to prevent shallow-depth overfitting.
 
 ### 13h. Game-tagged gameText headers
 
