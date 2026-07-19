@@ -170,17 +170,30 @@ export const DEFAULT_WEIGHTS: EvalWeights = {
 }
 
 /**
- * Per-game eval weights. Mangala starts as a copy of the Kalah defaults with
- * pit-stone weights zeroed because the reversed end-sweep (the emptied player
- * collects the opponent's remaining stones) makes Kalah's hoard-friendly
- * positive pit weights strategically backwards. Zero is a neutral starting
- * point pending self-play tuning in a later step.
+ * Per-game eval weights.
+ *
+ * Mangala weights tuned via parallel self-play sweep at 4000 ms/move
+ * (scripts/tuneMangalaSweepParallel.ts) then cross-budget validated at
+ * 3500 ms (Expert bot) and 5000 ms. The reversed end-sweep
+ * (to-emptied-player) penalises hoarding, so pitStone weights are
+ * negative to encourage timely pit-emptying. capture and emptyPitSetup
+ * are low because deeper search finds tactical opportunities on its own;
+ * mobility is slightly higher to improve positional awareness.
+ *
+ * Final validation vs baseline:
+ *   3500 ms: 15W/1D/4L = 77.5 % score (20 games)
+ *   4000 ms: 25W/0D/5L = 83.3 % score (30 games)
  */
 export const WEIGHTS_BY_GAME: Record<GameId, EvalWeights> = {
   kalah: DEFAULT_WEIGHTS,
   mangala: {
-    ...DEFAULT_WEIGHTS,
-    pitStones: [0, 0, 0, 0, 0, 0],
+    storeDiff: 1.0,
+    mobility: 0.6,
+    pitStones: [-0.03, -0.03, -0.03, -0.03, -0.03, -0.03],
+    ownCapturePerStone: 0.2,
+    oppCaptureThreatPerStone: 0,
+    extraTurnMove: 0,
+    emptyPitSetup: 0,
   },
 }
 
